@@ -48,6 +48,9 @@ function validateDraft(draft: DeliveryDraft): void {
 
   const matchedIds = new Set<string>();
   for (const line of draft.receiptLines) {
+    if (typeof line.identityConfirmed !== "boolean" || typeof line.conditionConfirmed !== "boolean") {
+      throw new ReconciliationInputError("Each receipt confirmation must be a boolean");
+    }
     quantity(line.receivedQuantity, "Received quantity");
     quantity(line.damagedQuantity, "Damaged quantity");
     if (

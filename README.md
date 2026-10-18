@@ -11,7 +11,7 @@ KiranaProof is an invoice-first, multilingual delivery reconciliation and suppli
 - Structured invoice/receipt types and fictional data fixtures.
 - Distinct shortages, excess, damage, wrong item/variant and unexpected items.
 - Conservative review state for missing line checks, unknown condition and mismatched units.
-- 25 focused Node test cases and GitHub Actions check workflow.
+- 26 focused Node test cases and GitHub Actions check workflow.
 - Explicit full-invoice completeness confirmation: matching only the entered subset is never enough.
 
 **Not built yet:** Next.js UI, persistence, authentication, Gnani live STT, claims, share links and supplier response. The engine only *evaluates* structured inputs and never persists a delivery or creates a claim.

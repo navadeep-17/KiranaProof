@@ -197,3 +197,9 @@ test("confirmations must be actual booleans at runtime", () => {
   (d as unknown as Record<string, unknown>).invoiceCompleteConfirmed = "true";
   assert.throws(() => reconcile(d), ReconciliationInputError);
 });
+
+test("receipt confirmations cannot be truthy strings from an unvalidated request", () => {
+  const d = cleanDelivery();
+  (d.receiptLines[0] as unknown as Record<string, unknown>).identityConfirmed = "true";
+  assert.throws(() => reconcile(d), ReconciliationInputError);
+});
