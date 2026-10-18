@@ -17,6 +17,8 @@ A complete, explicitly verified invoice comparison is a precondition for `RECONC
 - The UI, persistence, live provider integration, claims and supplier responses are **not yet implemented**.
 - The fixtures use fictional transactions; they are not proof of live voice accuracy.
 - Critical source values are not silently inferred. Unknown quantities are `null`, not `0`.
+- Retailer must confirm that the invoice baseline is complete (`invoiceCompleteConfirmed`); a matched but incomplete entered list may not be reconciled.
+- Item/variant mismatches must preserve separately observed damage rather than discarding it.
 
 ## Upcoming engineering decisions
 - Add an authoritative backend confirmation gate bound to delivery version.

@@ -147,3 +147,53 @@ test("product casing or surrounding whitespace does not create false issues", ()
   d.receiptLines[0]!.productName = "  PARLE-g ";
   assert.equal(reconcile(d).result, "RECONCILED");
 });
+
+test("a short but fully matched entered list is NOT a confirmed complete invoice", () => {
+  const d = cleanDelivery();
+  d.invoiceCompleteConfirmed = false;
+  const r = reconcile(d);
+  assert.equal(r.result, "NEEDS_REVIEW");
+  assert.equal(r.canMarkReconciled, false);
+  assert.equal(r.canCreateClaim, false);
+  assert.equal(r.unresolved[0]?.code, "INVOICE_UNCONFIRMED");
+});
+
+test("unknown received product name is not reported as an established wrong item", () => {
+  const d = cleanDelivery();
+  d.receiptLines[0]!.productName = "";
+  const r = reconcile(d);
+  assert.equal(r.result, "NEEDS_REVIEW");
+  assert.equal(r.discrepancies.length, 0);
+});
+
+test("missing variant on a variant-specific invoice needs clarification", () => {
+  const d = cleanDelivery();
+  d.receiptLines[0]!.variant = "";
+  const r = reconcile(d);
+  assert.equal(r.result, "NEEDS_REVIEW");
+  assert.equal(r.discrepancies.length, 0);
+});
+
+test("damaged, wrong-variant goods retain BOTH findings without calculating a fake shortage", () => {
+  const d = cleanDelivery();
+  d.receiptLines[0]!.variant = "Carton of 12";
+  d.receiptLines[0]!.damagedQuantity = 3;
+  const r = reconcile(d);
+  assert.deepEqual(r.discrepancies.map((x) => x.type), ["WRONG_VARIANT", "DAMAGE"]);
+  assert.equal(r.discrepancies.find((x) => x.type === "SHORTAGE"), undefined);
+});
+
+test("damaged unexpected goods preserve both the extra-item and damage findings", () => {
+  const d = cleanDelivery();
+  d.receiptLines.push({
+    invoiceLineId: null, productName: "Unexpected chips", variant: "10 pcs", unit: "box",
+    receivedQuantity: 2, damagedQuantity: 1, identityConfirmed: true, conditionConfirmed: true,
+  });
+  assert.deepEqual(reconcile(d).discrepancies.slice(-2).map((x) => x.type), ["UNEXPECTED_ITEM", "DAMAGE"]);
+});
+
+test("confirmations must be actual booleans at runtime", () => {
+  const d = cleanDelivery();
+  (d as unknown as Record<string, unknown>).invoiceCompleteConfirmed = "true";
+  assert.throws(() => reconcile(d), ReconciliationInputError);
+});

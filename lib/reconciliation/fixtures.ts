@@ -25,6 +25,7 @@ export function cleanDelivery(): DeliveryDraft {
   return {
     invoiceLines: DEMO_INVOICE.map((line) => ({ ...line })),
     receiptLines: DEMO_INVOICE.map((line) => verified(line, line.expectedQuantity)),
+    invoiceCompleteConfirmed: true,
     unexpectedItemsChecked: true,
   };
 }
@@ -37,6 +38,7 @@ export function discrepancyDelivery(): DeliveryDraft {
       verified(DEMO_INVOICE[1]!, 8, 2),
       // The detergent line is deliberately unverified so the UI must ask.
     ],
+    invoiceCompleteConfirmed: true,
     unexpectedItemsChecked: true,
   };
 }
@@ -45,6 +47,7 @@ export function emptyReceiptDelivery(): DeliveryDraft {
   return {
     invoiceLines: DEMO_INVOICE.map((line) => ({ ...line })),
     receiptLines: [],
+    invoiceCompleteConfirmed: false,
     unexpectedItemsChecked: false,
   };
 }

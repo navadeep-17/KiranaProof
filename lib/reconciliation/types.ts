@@ -23,6 +23,8 @@ export interface ReceiptLine {
 export interface DeliveryDraft {
   invoiceLines: InvoiceLine[];
   receiptLines: ReceiptLine[];
+  /** Retailer confirms the entered baseline contains EVERY line of the invoice/order. */
+  invoiceCompleteConfirmed: boolean;
   /** Retailer actively checked for goods absent from the invoice. */
   unexpectedItemsChecked: boolean;
 }
@@ -51,6 +53,7 @@ export interface Discrepancy {
 export interface UnresolvedCheck {
   code:
     | "INVOICE_EMPTY"
+    | "INVOICE_UNCONFIRMED"
     | "RECEIPT_UNVERIFIED"
     | "RECEIVED_QUANTITY_MISSING"
     | "DAMAGE_QUANTITY_MISSING"

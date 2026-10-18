@@ -31,6 +31,9 @@ function quantity(value: number | null, field: string): void {
 }
 
 function validateDraft(draft: DeliveryDraft): void {
+  if (typeof draft.invoiceCompleteConfirmed !== "boolean" || typeof draft.unexpectedItemsChecked !== "boolean") {
+    throw new ReconciliationInputError("Invoice completeness and unexpected-items confirmations must be explicit booleans");
+  }
   const invoiceIds = new Set<string>();
   for (const line of draft.invoiceLines) {
     if (!line.id.trim() || invoiceIds.has(line.id)) {
@@ -114,10 +117,19 @@ export function reconcile(draft: DeliveryDraft): ReconciliationResult {
   if (draft.invoiceLines.length === 0) {
     addUnresolved("INVOICE_EMPTY", null, "Add the complete invoice before reconciling.");
   }
+  if (!draft.invoiceCompleteConfirmed) {
+    addUnresolved("INVOICE_UNCONFIRMED", null, "Confirm that all lines from the invoice/order are entered.");
+  }
 
   for (const invoice of draft.invoiceLines) {
     const receipt = receiptsById.get(invoice.id);
-    if (!receipt || !receipt.identityConfirmed || !receipt.conditionConfirmed) {
+    if (
+      !receipt ||
+      !receipt.identityConfirmed ||
+      !receipt.conditionConfirmed ||
+      !receipt.productName.trim() ||
+      (invoice.variant.trim().length > 0 && !receipt.variant.trim())
+    ) {
       addUnresolved(
         "RECEIPT_UNVERIFIED",
         invoice.id,
@@ -153,42 +165,43 @@ export function reconcile(draft: DeliveryDraft): ReconciliationResult {
 
     checkedInvoiceLines++;
 
-    if (normalized(receipt.productName) !== normalized(invoice.productName)) {
+    const wrongProduct = normalized(receipt.productName) !== normalized(invoice.productName);
+    const wrongVariant = normalized(receipt.variant) !== normalized(invoice.variant);
+
+    if (wrongProduct) {
       discrepancies.push(
         issue("WRONG_ITEM", invoice, receipt, null, "Received product differs from invoiced product."),
       );
-      continue; // Never infer missing quantity across different products.
-    }
-
-    if (normalized(receipt.variant) !== normalized(invoice.variant)) {
+    } else if (wrongVariant) {
       discrepancies.push(
         issue("WRONG_VARIANT", invoice, receipt, null, "Received variant or pack size differs from invoice."),
       );
-      continue; // Never infer shortage across different variants.
+    } else {
+      // Only compare quantities when product, variant, and unit match.
+      if (receipt.receivedQuantity < invoice.expectedQuantity) {
+        discrepancies.push(
+          issue(
+            "SHORTAGE",
+            invoice,
+            receipt,
+            Number((invoice.expectedQuantity - receipt.receivedQuantity).toFixed(3)),
+            "Received quantity is below the invoiced quantity.",
+          ),
+        );
+      }
+      if (receipt.receivedQuantity > invoice.expectedQuantity) {
+        discrepancies.push(
+          issue(
+            "EXCESS",
+            invoice,
+            receipt,
+            Number((receipt.receivedQuantity - invoice.expectedQuantity).toFixed(3)),
+            "Received quantity exceeds the invoiced quantity.",
+          ),
+        );
+      }
     }
-
-    if (receipt.receivedQuantity < invoice.expectedQuantity) {
-      discrepancies.push(
-        issue(
-          "SHORTAGE",
-          invoice,
-          receipt,
-          Number((invoice.expectedQuantity - receipt.receivedQuantity).toFixed(3)),
-          "Received quantity is below the invoiced quantity.",
-        ),
-      );
-    }
-    if (receipt.receivedQuantity > invoice.expectedQuantity) {
-      discrepancies.push(
-        issue(
-          "EXCESS",
-          invoice,
-          receipt,
-          Number((receipt.receivedQuantity - invoice.expectedQuantity).toFixed(3)),
-          "Received quantity exceeds the invoiced quantity.",
-        ),
-      );
-    }
+    // Damage is independent of item/variant mismatch; never drop a valid damage observation.
     // Damaged items were physically received; never double-count as missing.
     if (receipt.damagedQuantity > 0) {
       discrepancies.push(
@@ -221,6 +234,11 @@ export function reconcile(draft: DeliveryDraft): ReconciliationResult {
       discrepancies.push(
         issue("UNEXPECTED_ITEM", null, receipt, receipt.receivedQuantity, "Item not listed on invoice."),
       );
+      if (receipt.damagedQuantity > 0) {
+        discrepancies.push(
+          issue("DAMAGE", null, receipt, receipt.damagedQuantity, "Unexpected goods were also damaged."),
+        );
+      }
     }
   }
 
