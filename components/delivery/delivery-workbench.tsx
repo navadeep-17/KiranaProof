@@ -193,13 +193,19 @@ export function DeliveryWorkbench() {
     invalidate();
   };
   const markRemainingCorrect = () => {
+    // Never erase an unverified shortage/damage that the user has started entering.
+    // Only untouched receipt rows can be confirmed through the bulk action.
     setReceipts((rows) => rows.map((r) => {
-      if (r.verified) return r;
+      if (r.verified || r.received.trim() !== "" || r.damaged.trim() !== "") return r;
       const match = invoice.find((line) => line.id === r.invoiceLineId);
-      return match ? {
+      if (!match ||
+        r.productName.trim() !== match.productName.trim() ||
+        r.variant.trim() !== match.variant.trim() ||
+        r.unit !== match.unit) return r;
+      return {
         ...r, productName: match.productName, variant: match.variant,
         unit: match.unit, received: match.expected, damaged: "0", verified: true,
-      } : r;
+      };
     }));
     invalidate();
   };
@@ -353,10 +359,10 @@ export function DeliveryWorkbench() {
             <section className="surface rounded-[22px] p-5 sm:p-7">
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div><p className="kicker">02 / Receipt verification</p><h2 className="mt-1 text-xl font-extrabold tracking-[-.03em]">What actually arrived?</h2><p className="mt-1 text-xs text-[#82908e]">{verifiedCount} of {invoice.length} lines explicitly verified</p></div>
-                <button className="btn btn-outline" onClick={markRemainingCorrect}><PackageCheck size={17}/> Confirm remaining lines correct</button>
+                <button className="btn btn-outline" onClick={markRemainingCorrect}><PackageCheck size={17}/> Confirm untouched lines correct</button>
               </div>
               <div className="mb-5 rounded-xl bg-[#fff8ed] px-4 py-3 text-xs leading-5 text-[#85683d]">
-                <strong>Use the bulk action only after checking every remaining item.</strong> It explicitly confirms the correct product, pack size, billed quantity received and zero damage for each unverified line. It is not AI inference.
+                <strong>Use the bulk action only after checking every remaining item.</strong> It confirms billed quantity and zero damage only on untouched rows. Partially entered differences are never overwritten. This is your explicit assertion, not AI inference.
               </div>
               <div className="space-y-4">
                 {invoice.map((line, index) => {

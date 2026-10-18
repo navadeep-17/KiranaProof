@@ -5,7 +5,7 @@ A complete, explicitly verified invoice comparison is a precondition for `RECONC
 
 ## Milestones
 1. **Reconciliation domain core (this PR):** pure deterministic engine, separate shortage vs damage, variants/units, ambiguity rules, fixtures and tests.
-2. **Application shell:** Next.js mobile UI, invoice editing, receipt checklist, results and review. No fabricated server persistence.
+2. **Application shell (this PR):** Next.js mobile UI, invoice editor, receipt checklist, results and review. All interactive with in-memory state; no fabricated server persistence.
 3. **Data and security:** Supabase Auth, tables, RLS, tenant isolation, durable deliveries and confirmation transactions. State transitions must not trust client-supplied result.
 4. **Claim and supplier workflow:** affected lines only, explicit owner approval, hashed expiry/revocable bearer links, scoped reply, audit timeline.
 5. **Gnani voice:** microphone PCM16 WAV, Prisma adapter with mock/live modes, structured interpretation constrained to invoice, clarification, read-back.

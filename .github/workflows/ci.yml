@@ -1,16 +1,15 @@
-name: Domain checks
+name: Product checks
 
 on:
   pull_request:
   push:
     branches:
       - main
-      - feat/reconciliation-foundation
 
 jobs:
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,3 +17,4 @@ jobs:
           node-version: "22"
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      - run: npm run build
