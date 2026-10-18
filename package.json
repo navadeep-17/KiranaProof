@@ -1,0 +1,19 @@
+{
+  "name": "kiranaproof",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Invoice-first, deterministic reconciliation core for KiranaProof",
+  "engines": {
+    "node": ">=22.10"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}
