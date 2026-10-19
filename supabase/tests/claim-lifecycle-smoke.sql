@@ -9,7 +9,7 @@ declare
   clean_delivery uuid;
   bad_delivery uuid;
   line_id uuid;
-  claim_id uuid;
+  v_claim_id uuid;
   finding jsonb;
   payload jsonb;
 begin
@@ -49,33 +49,33 @@ begin
   exception when others then
     if sqlerrm='UNEXPECTED_CROSS_OWNER_APPROVAL' then raise; end if;
   end;
-  claim_id:=(public.kp_approve_claim(own,bad_delivery,2)->>'claimId')::uuid;
-  if (select count(*) from public.claim_items where claim_id=claim_id)<>2 then
+  v_claim_id:=(public.kp_approve_claim(own,bad_delivery,2)->>'claimId')::uuid;
+  if (select count(*) from public.claim_items where claim_id=v_claim_id)<>2 then
     raise exception 'Missing approved claim items';
   end if;
-  if (public.kp_approve_claim(own,bad_delivery,2)->>'claimId')<>claim_id::text then
+  if (public.kp_approve_claim(own,bad_delivery,2)->>'claimId')<>v_claim_id::text then
     raise exception 'Duplicate approval changed claim';
   end if;
-  perform public.kp_issue_supplier_link(own,claim_id,repeat('a',64),now()+interval '2 days');
+  perform public.kp_issue_supplier_link(own,v_claim_id,repeat('a',64),now()+interval '2 days');
   if public.kp_get_supplier_claim(repeat('a',64)) is null then
     raise exception 'Valid token inaccessible';
   end if;
-  if (public.kp_revoke_supplier_link(own,claim_id)->>'revoked')<>'true' then
+  if (public.kp_revoke_supplier_link(own,v_claim_id)->>'revoked')<>'true' then
     raise exception 'Explicit revocation failed';
   end if;
   if public.kp_get_supplier_claim(repeat('a',64)) is not null then
     raise exception 'Revoked token still works';
   end if;
-  perform public.kp_issue_supplier_link(own,claim_id,repeat('b',64),now()+interval '2 days');
+  perform public.kp_issue_supplier_link(own,v_claim_id,repeat('b',64),now()+interval '2 days');
   if public.kp_get_supplier_claim(repeat('b',64)) is null then
     raise exception 'Reissued token failed';
   end if;
   update public.claim_share_links set expires_at=now()-interval '1 minute'
-  where claim_id=claim_id;
+  where claim_id=v_claim_id;
   if public.kp_get_supplier_claim(repeat('b',64)) is not null then
     raise exception 'Expired token still works';
   end if;
-  perform public.kp_issue_supplier_link(own,claim_id,repeat('c',64),now()+interval '2 days');
+  perform public.kp_issue_supplier_link(own,v_claim_id,repeat('c',64),now()+interval '2 days');
   perform public.kp_supplier_respond(repeat('c',64),'PROPOSED_RESOLUTION','Replacement by Friday.');
   if public.kp_get_supplier_claim(repeat('c',64)) is not null then
     raise exception 'Used token still works';
@@ -87,13 +87,13 @@ begin
     if sqlerrm='UNEXPECTED_SECOND_RESPONSE' then raise; end if;
   end;
   begin
-    perform public.kp_resolve_claim(outsider,claim_id,'OTHER','Fake settlement');
+    perform public.kp_resolve_claim(outsider,v_claim_id,'OTHER','Fake settlement');
     raise exception 'UNEXPECTED_OTHER_OWNER_RESOLUTION';
   exception when others then
     if sqlerrm='UNEXPECTED_OTHER_OWNER_RESOLUTION' then raise; end if;
   end;
-  perform public.kp_resolve_claim(own,claim_id,'REPLACED','Replacement received.');
-  if (select status from public.claims where id=claim_id)<>'RESOLVED' then
+  perform public.kp_resolve_claim(own,v_claim_id,'REPLACED','Replacement received.');
+  if (select status from public.claims where id=v_claim_id)<>'RESOLVED' then
     raise exception 'Resolution not recorded';
   end if;
 end $test$;
