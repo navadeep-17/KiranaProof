@@ -118,7 +118,7 @@ function IssueCard({
         <div>
           <p className="text-xs font-bold uppercase tracking-[.11em] text-[#aa5626]">Verified discrepancy</p>
           <h2 className="mt-1 text-2xl font-extrabold tracking-[-.04em] text-[#823f24]">Discrepancy detected</h2>
-          <p className="mt-2 text-sm leading-6 text-[#94674f]">Review the affected items below. A supplier claim will only be created after your approval in a future milestone.</p>
+          <p className="mt-2 text-sm leading-6 text-[#94674f]">Review the affected items below. A supplier claim requires a separate approval after this delivery has been saved and confirmed.</p>
         </div>
       </div>
     </div>
