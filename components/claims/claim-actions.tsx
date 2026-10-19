@@ -69,6 +69,23 @@ export function ClaimManagementActions({claimId,status}:{claimId:string;status:s
     }catch(e){setError(e instanceof Error?e.message:"Link generation failed.");}
     finally{setLinkBusy(false);}
   }
+  const [revokeBusy,setRevokeBusy]=useState(false);
+  const [revokeMessage,setRevokeMessage]=useState<string|null>(null);
+  async function revokeLink() {
+    if(revokeBusy) return;
+    setRevokeBusy(true);setError(null);setRevokeMessage(null);
+    try {
+      const response=await fetch(`/api/v1/claims/${claimId}/revoke-share`,{
+        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmRevoke:true}),
+      });
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.error??"Unable to revoke supplier link.");
+      setLink(null);setExpires(null);setCopied(false);
+      setRevokeMessage(data.revoked?"The supplier link is now revoked.":"There was no active link to revoke.");
+    }catch(e){setError(e instanceof Error?e.message:"Unable to revoke link.");}
+    finally{setRevokeBusy(false);}
+  }
+
   async function copyLink() {
     if(!link) return;
     try {await navigator.clipboard.writeText(link);setCopied(true);}
@@ -113,6 +130,13 @@ export function ClaimManagementActions({claimId,status}:{claimId:string;status:s
         className="btn btn-primary mt-4">
         <Link2 size={16}/>{linkBusy?"Generating...":"Generate or rotate link"}
       </button>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" disabled={revokeBusy} onClick={revokeLink} className="btn btn-outline">
+          {revokeBusy?"Revoking...":"Revoke current supplier link"}
+        </button>
+        <span className="text-xs text-[#7c8991]">Revocation works even if you lost the original link.</span>
+      </div>
+      {revokeMessage && <p role="status" className="mt-3 text-sm text-[#286c48]">{revokeMessage}</p>}
       {link && <div className="mt-5 rounded-xl border border-[#cddfd6] bg-[#f4fbf6] p-4">
         <strong className="text-sm text-[#225943]">One-time link — copy it now</strong>
         <input aria-label="Supplier claim link" readOnly value={link} className="input mt-2"/>
