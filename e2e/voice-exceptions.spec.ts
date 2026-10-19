@@ -31,3 +31,21 @@ test("without Gnani key, voice remains manual and no transcript is fabricated",a
  await expect(page.getByRole("textbox",{name:/Review or type the exact spoken words/i})).toHaveValue("");
  await expect(page.getByText("Gnani Prisma transcript",{exact:false})).toHaveCount(0);
 });
+
+test("multiple independent exceptions are copied individually and never verified automatically",async({page})=>{
+ await openReceipt(page);
+ await page.getByRole("textbox",{name:/Review or type the exact spoken words/i})
+   .fill("Parle G 2 cartons missing and Lux Soap 1 box damaged");
+ await page.getByRole("button",{name:/Analyze transcript/i}).click();
+ await expect(page.getByRole("button",{name:/Copy suggestion into receipt/i})).toHaveCount(2);
+ await page.getByRole("button",{name:/Copy suggestion into receipt/i}).first().click();
+ const biscuits=page.locator("article").filter({has:page.getByRole("heading",{name:"Parle-G"})});
+ await expect(biscuits.getByRole("textbox",{name:/Quantity received/i})).toHaveValue("10");
+ await expect(biscuits.getByRole("checkbox",{name:/I verified this product/i})).not.toBeChecked();
+ await expect(page.getByRole("button",{name:/Copy suggestion into receipt/i})).toHaveCount(1);
+ await page.getByRole("button",{name:/Copy suggestion into receipt/i}).click();
+ const soap=page.locator("article").filter({has:page.getByRole("heading",{name:"Lux Soap"})});
+ await expect(soap.getByRole("textbox",{name:/Damaged quantity/i})).toHaveValue("1");
+ await expect(soap.getByRole("checkbox",{name:/I verified this product/i})).not.toBeChecked();
+ await expect(page.getByText("0 of 3 lines explicitly verified")).toBeVisible();
+});
