@@ -2,63 +2,75 @@
 
 **Check the whole delivery. Speak the exceptions. Resolve only what is wrong.**
 
-KiranaProof is an invoice-first, multilingual delivery reconciliation and discrepancy resolution platform. Every invoice line must be accounted for. Fully verified clean deliveries need **no claim**; incomplete verification remains **NEEDS_REVIEW**.
+KiranaProof is an invoice-first, multilingual delivery reconciliation and discrepancy-resolution product for Indian retailers. Every invoice/order line is accounted for before reconciliation. A fully verified clean delivery is **RECONCILED** with **no claim**; unknown inputs remain **NEEDS_REVIEW**.
 
-## Implemented
+## Implementation status
 
-- Mobile-first Next.js + TypeScript + Tailwind landing page and delivery workbench.
-- Structured invoice and receipt entry, explicit baseline/condition/extras confirmations, missing/damaged/wrong/excess detection.
-- Deterministic reconciliation engine; AI is not allowed to determine final business status.
-- Supabase Auth sign-up/sign-in, per-store private dashboard and sign-out.
-- Store, supplier, delivery, invoice, receipt, reconciliation-run and audit-event tables, all RLS protected.
-- Server-only **atomic delivery save**, idempotent request ID, **version-checked reconciliation confirmation**, and owner-scoped saved delivery views.
-- Clean delivery → saved `RECONCILED`, with **zero discrepancy claim**. A verified mismatch → saved `HAS_DISCREPANCY` (no supplier action yet).
-- Automated TypeScript/test/build CI (39 tests currently passing).
+### Delivery and reconciliation (Milestones 1–3)
+- Next.js App Router + TypeScript + Tailwind responsive workbench.
+- Invoice baseline, received quantities, damage, unexpected goods, manual checks and deterministic reconciliation.
+- Supabase Auth and private retailer dashboard, atomic/idempotent draft saves, version-checked edits/resume, saved comparison and explicit confirmation.
+- Server recomputes findings from persisted rows. No LLM can authorize claims or decide arithmetic.
 
-**Limitations:** There is no voice AI, claim sharing, supplier workflow, OCR, editing of saved drafts or automatic messaging yet. Live browser authentication/persistence awaits deployment configuration and a manual end-to-end walkthrough. GitHub CI does not itself prove a live Supabase session works.
+### Approved claims and supplier response (Milestone 4 — development branch)
+- Retailer reviews confirmed discrepancies and separately **approves** a claim. No claim is generated for clean or incomplete deliveries.
+- A claim contains only affected items. Duplicate approval returns the same claim.
+- Retailer generates a **256-bit expiring supplier link** and copies it manually. No messages are sent.
+- Supplier opens the scoped link without retailer login, views only relevant discrepancies and can respond **once**.
+- Links are stored as SHA-256 hashes, can expire, rotate, or be revoked immediately.
+- Retailer alone records the final outcome (replacement, credit, or other); supplier cannot mark a claim settled.
+- Store-level RLS, server-only mutation RPCs, restrictive API-origin policy and audit events.
+
+**Not yet implemented:** real Gnani voice recognition/extraction, OCR, automatic messaging, production deployment. The live authenticated browser → Supabase workflow is not yet accepted.
+
+## Branch and PR workflow
+
+- Milestone 3: [PR #7](https://github.com/navadeep-17/KiranaProof/pull/7), still a draft pending real signed-in localhost integration.
+- Milestone 4: [PR #8](https://github.com/navadeep-17/KiranaProof/pull/8), stacked on the M3 feature branch rather than main; **do not merge until M3 is verified**.
+- Neither PR is a public deployment. Claims must not be presented as production-ready.
 
 ## Run locally
 
-Node.js 22.10+ required.
+Requires Node.js 22.10+.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local
-# Set your public Supabase URL, publishable key, and server-side secret key in .env.local
+# Configure your own private development environment values in .env.local
 npm run check
 npm run dev
 ```
 
-Open http://localhost:3000, sign up or sign in, and choose **Open reconciliation workbench**. Use **Load sample invoice** for synthetic test data, explicitly confirm the complete invoice, verify every receipt line, review the result and click **Confirm & save**.
+Public Supabase URL and publishable key may be used by the browser; `SUPABASE_SECRET_KEY` is strictly backend-only. Never commit credentials or share a server secret in chat. Live login needs a locally configured Supabase project and appropriate Auth redirect settings.
 
-### Configuration
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
-SUPABASE_SECRET_KEY=<secret-backend-key>
-```
-
-Never commit real keys or credentials, add secret keys to `NEXT_PUBLIC_` variables, or paste them into issues. Configure them in `.env.local` and your deployment provider's protected environment-variable settings. Auth email confirmation/redirect URL should be configured for the final deployment.
-
-## Security architecture
-
-- Browser uses Supabase publishable key for authentication and SELECT protected by RLS.
-- All writes are through authenticated Next.js Route Handlers using server-only credentials.
-- Write RPCs are callable **only** by the service role and check the verified owner ID supplied by the server.
-- Confirmation recalculates status from saved invoice and receipt rows (not from a browser-supplied result).
-- The database checks version and basic clean-reconciliation invariants in the same transaction.
-- Supplier links and claims are intentionally not present until the next milestone.
-
-## Test and roadmap
+For CI-style tests:
 
 ```bash
 npm run check
 npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
-See [implementation order](docs/implementation-order.md) and [backend security contract](docs/backend-security.md).
+Playwright browser tests use mocked save API responses; they do **not** prove a real signed-in session and database write work. Separate rollback-only SQL tests validate the database commands.
 
-**Not yet release-ready:** a configured deployment, one real authenticated end-to-end save/reconcile smoke test and a dependency lockfile are outstanding. No accuracy claims about Gnani have been made.
+## Critical product rules
 
-Product specification: [KiranaProof PRD v1.2](https://docs.google.com/document/d/18PgRI6DVQoKdjv-4Kh51fu59qxJ8yAVe_dKpYMLxomU/edit).
+- Complete invoice/order baseline must be confirmed.
+- No item is silently assumed delivered: every line, received count and condition must be verified.
+- Unknown quantities are `null`, not `0`; pack units are not silently converted.
+- Damaged quantity is physically received and not counted again as missing.
+- Incomplete or ambiguous deliveries stay `NEEDS_REVIEW`.
+- A verified clean delivery creates **zero claims and zero supplier actions**.
+- A discrepancy requires explicit retailer claim approval; supplier links require separate explicit sharing.
+- The supplier's reply does not prove replacement/payment; only the retailer records resolution.
+
+## Verification and specifications
+
+- GitHub CI on current M4 branch: **57 unit/domain tests**, **10 desktop/mobile Playwright tests**, TypeScript and production build passed.
+- Database: `supabase/tests/draft-lifecycle-smoke.sql`, `supabase/tests/rls-isolation-smoke.sql`, `supabase/tests/claim-lifecycle-smoke.sql` — admin-only, synthetic and entirely rolled back.
+- [Milestone 3 acceptance checklist](docs/milestone3-acceptance.md)
+- [Milestone 4 acceptance checklist](docs/milestone4-acceptance.md)
+- [KiranaProof PRD v1.2](https://docs.google.com/document/d/18PgRI6DVQoKdjv-4Kh51fu59qxJ8yAVe_dKpYMLxomU/edit)
+
+Development priority: finish real localhost authentication and persistence acceptance, then integrate the claim lifecycle, then genuine Gnani voice, then release hardening. **Deployment stays deferred.**
