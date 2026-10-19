@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { transcribePrisma,PrismaError,PRISMA_REST_URL } from "../lib/voice/prisma.ts";
 import { pcm16ToWav,getWavDuration } from "../lib/voice/wav.ts";
-function wav(){const a=pcm16ToWav(new Float32Array(16000));return new File([a],"test.wav",{type:"audio/wav"});}
+function wav(){const a=pcm16ToWav(new Float32Array(16000));return new File([Uint8Array.from(a).buffer],"test.wav",{type:"audio/wav"});}
 test("WAV encoding roundtrips duration and rejects malformed/wrong rate",()=>{
   const b=pcm16ToWav(new Float32Array(32000));
   assert.equal(getWavDuration(b),2);

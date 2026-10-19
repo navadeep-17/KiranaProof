@@ -41,7 +41,7 @@ export async function POST(request:NextRequest) {
   if(seconds===null)return NextResponse.json({error:"Audio must be 16 kHz mono PCM WAV, up to 25 seconds."},{status:400});
   const result=await transcribePrisma({
     apiKey:process.env.GNANI_API_KEY,language,
-    audio:new File([new Uint8Array(bytes)],"retailer-voice.wav",{type:"audio/wav"}),
+    audio:new File([Uint8Array.from(bytes).buffer],"retailer-voice.wav",{type:"audio/wav"}),
   });
   // Never persist raw audio; only send the retailer the editable transcript.
   return NextResponse.json({transcript:result.transcript,provider:"gnani-prisma",seconds},
