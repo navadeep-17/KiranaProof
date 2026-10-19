@@ -55,7 +55,7 @@ test("network loss plus changed input reuses original create request and updates
   await page.goto("/deliveries/new");
   await page.getByRole("button",{name:/Load sample invoice/i}).click();
   await page.getByRole("button",{name:/Save incomplete draft/i}).click();
-  await expect(page.getByRole("alert")).toContainText("Connection lost");
+  await expect(page.getByRole("alert").filter({hasText:"Connection lost"})).toContainText("Connection lost");
   await page.getByRole("textbox",{name:/Invoice \/ order reference/i}).fill("INV-1208-revised");
   await page.getByRole("button",{name:/Save incomplete draft/i}).click();
   await expect(page.getByRole("status")).toContainText("Draft saved securely");
