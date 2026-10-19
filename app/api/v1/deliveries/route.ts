@@ -39,8 +39,8 @@ export async function POST(request:NextRequest) {
   } catch(error) {
     if(error instanceof ZodError) return NextResponse.json({error:"Invalid delivery fields.",details:error.issues.map(x=>x.message)},{status:400});
     if(error instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
-    if(error instanceof Error && !error.message.includes("configured")) return NextResponse.json({error:error.message},{status:400});
+    // Avoid exposing internal database or network exception text to clients.
     console.error("Save route unavailable",error instanceof Error?error.name:"Unknown");
-    return NextResponse.json({error:"Save service unavailable."},{status:503});
+    return NextResponse.json({error:"Unable to process delivery. Check quantities and retry."},{status:503});
   }
 }

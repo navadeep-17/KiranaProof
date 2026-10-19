@@ -15,12 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --no-audit --no-fund
-      - name: Record regenerated npm lockfile for review
-        run: |
-          echo '__KP_LOCK_BEGIN__'
-          cat package-lock.json
-          echo '__KP_LOCK_END__'
+      - run: npm ci --no-audit --no-fund
       - run: npm run check
       - run: npm run build
       - run: npx playwright install --with-deps chromium
