@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createDeliverySchema, evaluateSubmission } from "@/lib/deliveries/schema";
+import { createDeliverySchema, evaluateSubmission, toDatabasePayload } from "@/lib/deliveries/schema";
 
 export const runtime="nodejs";
 
@@ -19,13 +19,7 @@ export async function POST(request:NextRequest) {
     const admin=createAdminClient();
     const {data,error}=await admin.rpc("kp_save_delivery",{
       p_owner:auth.user.id,p_request_id:parsed.clientRequestId,
-      p_payload:{
-        storeName:parsed.storeName,supplierName:parsed.supplierName,
-        referenceNumber:parsed.referenceNumber,baselineType:parsed.baselineType,
-        invoice:parsed.invoice,receipts:parsed.receipts,unexpected:parsed.unexpected,
-        invoiceCompleteConfirmed:parsed.invoiceCompleteConfirmed,
-        unexpectedItemsChecked:parsed.unexpectedItemsChecked,
-      },
+      p_payload:toDatabasePayload(parsed),
     });
     if(error) {
       console.error("Save RPC failed",error.code);

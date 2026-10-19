@@ -48,7 +48,6 @@ export const createDeliverySchema = z.object({
   if(new Set(receiptIds).size!==receiptIds.length || receiptIds.some(x=>!ids.includes(x))) {
     ctx.addIssue({code:"custom",message:"Invalid receipt-to-invoice mapping",path:["receipts"]});
   }
-  if(!value.invoiceCompleteConfirmed) ctx.addIssue({code:"custom",message:"The complete invoice must be confirmed.",path:["invoiceCompleteConfirmed"]});
 });
 export const confirmDeliverySchema=z.object({expectedVersion:z.number().int().positive()}).strict();
 export type CreateDeliveryInput=z.infer<typeof createDeliverySchema>;
@@ -59,4 +58,17 @@ export function evaluateSubmission(value:CreateDeliveryInput) {
     invoiceCompleteConfirmed:value.invoiceCompleteConfirmed,
     unexpectedItemsChecked:value.unexpectedItemsChecked,
   }));
+}
+
+export const updateDeliverySchema=createDeliverySchema.omit({clientRequestId:true})
+  .extend({expectedVersion:z.number().int().positive()});
+
+export function toDatabasePayload(value:Omit<CreateDeliveryInput,"clientRequestId">) {
+  return {
+    storeName:value.storeName,supplierName:value.supplierName,
+    referenceNumber:value.referenceNumber,baselineType:value.baselineType,
+    invoice:value.invoice,receipts:value.receipts,unexpected:value.unexpected,
+    invoiceCompleteConfirmed:value.invoiceCompleteConfirmed,
+    unexpectedItemsChecked:value.unexpectedItemsChecked,
+  };
 }
