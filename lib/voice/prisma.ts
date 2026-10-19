@@ -6,7 +6,8 @@
 export const PRISMA_REST_URL = "https://api.vachana.ai/stt/v3";
 export type PrismaLanguage = "te-IN" | "en-IN";
 export class PrismaError extends Error {
-  constructor(message:string,public readonly status:number){super(message);this.name="PrismaError";}
+  readonly status:number;
+  constructor(message:string,status:number){super(message);this.name="PrismaError";this.status=status;}
 }
 export async function transcribePrisma(input:{
   audio:File;language:PrismaLanguage;apiKey:string;fetcher?:typeof fetch;
