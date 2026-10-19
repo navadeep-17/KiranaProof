@@ -1,6 +1,7 @@
 import { NextRequest,NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getWavDuration } from "@/lib/voice/wav";
+import { readBoundedMultipart,RequestBodyError } from "@/lib/http/bounded-body";
 import { PrismaError,transcribePrisma } from "@/lib/voice/prisma";
 
 export const runtime="nodejs";
@@ -29,7 +30,7 @@ export async function POST(request:NextRequest) {
   if(process.env.GNANI_MODE!=="live"||!process.env.GNANI_API_KEY){
     return NextResponse.json({error:"Live Gnani voice is not configured. Use the editable text entry for now."},{status:503});
   }
-  const multipart=await request.formData();
+  const multipart=await readBoundedMultipart(request,900_000);
   const language=multipart.get("language");
   if(language!=="te-IN"&&language!=="en-IN")return NextResponse.json({error:"Choose Telugu or Indian English."},{status:400});
   const file=multipart.get("audio");
@@ -47,6 +48,7 @@ export async function POST(request:NextRequest) {
   return NextResponse.json({transcript:result.transcript,provider:"gnani-prisma",seconds},
    {headers:{"Cache-Control":"no-store, private"}});
  }catch(e){
+  if(e instanceof RequestBodyError)return NextResponse.json({error:e.message},{status:e.status});
   if(e instanceof PrismaError)return NextResponse.json({error:e.message},{status:e.status});
   console.error("Voice transcription unavailable",e instanceof Error?e.name:"Unknown");
   return NextResponse.json({error:"Voice service unavailable; type the exception instead."},{status:503});

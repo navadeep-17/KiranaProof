@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { RequestBodyError,readBoundedJson } from "@/lib/http/bounded-body";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { supplierResponseSchema } from "@/lib/claims/schema";
 import { isSupplierToken,hashSupplierToken } from "@/lib/claims/token-core";
@@ -11,9 +12,7 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{token:s
   const {token}=await params;
   if(!isSupplierToken(token)) return NextResponse.json({error:"Invalid or expired supplier link."},{status:404});
   try {
-    const raw=await request.text();
-    if(raw.length>5000) return NextResponse.json({error:"Response is too long."},{status:413});
-    const input=supplierResponseSchema.safeParse(JSON.parse(raw));
+    const input=supplierResponseSchema.safeParse(await readBoundedJson(request,5000));
     if(!input.success) return NextResponse.json({error:"Choose a valid response and add an explanation when needed."},{status:400});
     const admin=createAdminClient();
     const {data,error}=await admin.rpc("kp_supplier_respond",{
@@ -29,7 +28,8 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{token:s
       headers:{"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer"},
     });
   }catch(error) {
-    if(error instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
+    if(error instanceof RequestBodyError)
+      return NextResponse.json({error:error.message},{status:error.status});
     console.error("Supplier reply unavailable",error instanceof Error?error.name:"Unknown");
     return NextResponse.json({error:"Supplier response unavailable."},{status:503});
   }
