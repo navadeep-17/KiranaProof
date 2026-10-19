@@ -30,8 +30,7 @@ const unexpectedRow = z.object({
   verified: z.boolean(),
 }).strict();
 
-export const createDeliverySchema = z.object({
-  clientRequestId: z.uuid(),
+const deliveryFields = z.object({
   storeName: stringField(100).min(1),
   supplierName: stringField(150).min(1),
   referenceNumber: stringField(120).min(1),
@@ -41,14 +40,31 @@ export const createDeliverySchema = z.object({
   unexpected: z.array(unexpectedRow).max(25),
   invoiceCompleteConfirmed: z.boolean(),
   unexpectedItemsChecked: z.boolean(),
-}).strict().superRefine((value,ctx) => {
-  const ids=value.invoice.map(x=>x.id);
-  if(new Set(ids).size!==ids.length) ctx.addIssue({code:"custom",message:"Duplicate invoice ids",path:["invoice"]});
-  const receiptIds=value.receipts.map(x=>x.invoiceLineId);
-  if(new Set(receiptIds).size!==receiptIds.length || receiptIds.some(x=>!ids.includes(x))) {
+}).strict();
+
+function validateLineMappings(
+  value: z.infer<typeof deliveryFields>,
+  ctx: z.RefinementCtx,
+) {
+  const ids = value.invoice.map(x => x.id);
+  if (new Set(ids).size !== ids.length) {
+    ctx.addIssue({code:"custom",message:"Duplicate invoice ids",path:["invoice"]});
+  }
+  const receiptIds = value.receipts.map(x => x.invoiceLineId);
+  if (new Set(receiptIds).size !== receiptIds.length ||
+      receiptIds.some(x => !ids.includes(x))) {
     ctx.addIssue({code:"custom",message:"Invalid receipt-to-invoice mapping",path:["receipts"]});
   }
-});
+}
+
+export const createDeliverySchema = deliveryFields
+  .extend({clientRequestId:z.uuid()})
+  .superRefine(validateLineMappings);
+
+export const updateDeliverySchema = deliveryFields
+  .extend({expectedVersion:z.number().int().positive()})
+  .superRefine(validateLineMappings);
+
 export const confirmDeliverySchema=z.object({expectedVersion:z.number().int().positive()}).strict();
 export type CreateDeliveryInput=z.infer<typeof createDeliverySchema>;
 
@@ -59,9 +75,6 @@ export function evaluateSubmission(value:Omit<CreateDeliveryInput,"clientRequest
     unexpectedItemsChecked:value.unexpectedItemsChecked,
   }));
 }
-
-export const updateDeliverySchema=createDeliverySchema.omit({clientRequestId:true})
-  .extend({expectedVersion:z.number().int().positive()});
 
 export function toDatabasePayload(value:Omit<CreateDeliveryInput,"clientRequestId">) {
   return {
