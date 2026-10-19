@@ -16,7 +16,9 @@ Project: KiranaProof, region ap-south-1. Git-tracked migration: `20261019034211_
 - Applied successfully to dedicated KiranaProof database.
 - Public tables: stores, suppliers, deliveries, invoice_lines, receipt_lines, reconciliation_runs, audit_events.
 - All tables RLS enabled; Supabase security advisor returned **no lints**.
-- The database is empty; no fake user authentication or delivery success has been fabricated.
+- Synthetic transactional smoke checks have exercised clean reconciliation, shortage confirmation, false-clean rejection and stale-version rejection; the test transaction was rolled back.
+- All tables were confirmed empty after that smoke test, so no synthetic accounts or deliveries remain.
+- The GitHub build verifies TypeScript and server routes but does not yet test Supabase API authentication using a live browser login.
 
 ## Notes
 - Next steps: authenticated store onboarding, atomic draft save (single transaction), versioned confirmation with audit events, and RLS integration tests.

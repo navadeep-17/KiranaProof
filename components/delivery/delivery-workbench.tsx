@@ -287,6 +287,11 @@ export function DeliveryWorkbench() {
         throw new Error(data.error ?? "Unable to save delivery.");
       }
       setSavedDelivery(data.id);
+      if(data.status==="RECONCILED" || data.status==="HAS_DISCREPANCY") {
+        router.push(`/deliveries/${encodeURIComponent(data.id)}`);
+        router.refresh();
+        return;
+      }
       const confirmed=await fetch(`/api/v1/deliveries/${encodeURIComponent(data.id)}/confirm`,{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({expectedVersion:data.version}),

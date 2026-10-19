@@ -31,7 +31,14 @@ export async function POST(request:NextRequest) {
       console.error("Save RPC failed",error.code);
       return NextResponse.json({error:"Could not save delivery. Please retry."},{status:500});
     }
-    return NextResponse.json({id:data.id,version:data.version,replayed:data.replayed},{status:data.replayed?200:201});
+    // Read current state on idempotent replays. A successful confirm may already
+    // have advanced the delivery from version 1 to version 2.
+    const {data:current,error:readError}=await admin.from("deliveries")
+      .select("version,status").eq("id",data.id).single();
+    if(readError||!current) return NextResponse.json({error:"Delivery saved but status unavailable."},{status:503});
+    return NextResponse.json({
+      id:data.id,version:current.version,status:current.status,replayed:data.replayed,
+    },{status:data.replayed?200:201});
   } catch(error) {
     if(error instanceof ZodError) return NextResponse.json({error:"Invalid delivery fields.",details:error.issues.map(x=>x.message)},{status:400});
     if(error instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
