@@ -13,7 +13,8 @@
     "start": "next start",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "^16.0.0",
@@ -31,6 +32,7 @@
     "@types/react-dom": "^19.2.0",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.1.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@playwright/test": "1.56.1"
   }
 }
