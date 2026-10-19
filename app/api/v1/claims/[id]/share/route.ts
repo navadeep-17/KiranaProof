@@ -3,8 +3,10 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { readBoundedJson,RequestBodyError } from "@/lib/http/bounded-body";
 import { issueShareLinkSchema } from "@/lib/claims/schema";
 import { createSupplierToken,hashSupplierToken } from "@/lib/claims/token-core";
+import { buildSupplierShareUrl } from "@/lib/claims/share-url";
 
 export const runtime="nodejs";
 export async function POST(request:NextRequest,{params}:{params:Promise<{id:string}>}) {
@@ -16,9 +18,13 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     const client=await createServerSupabaseClient();
     const {data:auth,error:authError}=await client.auth.getUser();
     if(authError||!auth.user) return NextResponse.json({error:"Authentication required."},{status:401});
-    const input=issueShareLinkSchema.safeParse(await request.json());
+    const input=issueShareLinkSchema.safeParse(await readBoundedJson(request));
     if(!input.success) return NextResponse.json({error:"Explicitly confirm the link expiry before generating."},{status:400});
     const token=createSupplierToken();
+    // Validate the destination before creating/rotating a server-side share link.
+    const url=buildSupplierShareUrl(
+      token,request.url,process.env.APP_PUBLIC_ORIGIN,process.env.NODE_ENV==="production",
+    );
     const tokenHash=hashSupplierToken(token);
     const expiresAt=new Date(Date.now()+input.data.expiresInDays*86400000).toISOString();
     const admin=createAdminClient();
@@ -32,11 +38,15 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
       return NextResponse.json({error:"Unable to issue a supplier link."},{status:503});
     }
     // Link is returned only once. Regenerating it immediately invalidates the old link.
-    const url=new URL("/supplier/"+token,request.url).toString();
+
     return NextResponse.json({url,expiresAt:data.expiresAt},{
       headers:{"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer","X-Robots-Tag":"noindex"},
     });
   }catch(error) {
+    if(error instanceof Error && error.message.startsWith("APP_PUBLIC_ORIGIN"))
+      return NextResponse.json({error:"Supplier link sharing is not configured yet."},{status:503});
+    if(error instanceof RequestBodyError)
+      return NextResponse.json({error:error.message},{status:error.status});
     if(error instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
     console.error("Supplier share unavailable",error instanceof Error?error.name:"Unknown");
     return NextResponse.json({error:"Unable to issue supplier link."},{status:503});

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { readBoundedJson,RequestBodyError } from "@/lib/http/bounded-body";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -18,7 +19,7 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     const userClient=await createServerSupabaseClient();
     const {data:auth,error:authError}=await userClient.auth.getUser();
     if(authError||!auth.user) return NextResponse.json({error:"Authentication required."},{status:401});
-    const body=confirmDeliverySchema.parse(await request.json());
+    const body=confirmDeliverySchema.parse(await readBoundedJson(request));
     const admin=createAdminClient();
     const {data:store,error:storeError}=await admin.from("stores")
       .select("id").eq("owner_user_id",auth.user.id).maybeSingle();
@@ -54,6 +55,8 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     }
     return NextResponse.json({id:data.id,status:data.status,version:data.version,result});
   } catch(error) {
+    if(error instanceof RequestBodyError)
+      return NextResponse.json({error:error.message},{status:error.status});
     if(error instanceof z.ZodError||error instanceof SyntaxError)
       return NextResponse.json({error:"Invalid confirmation request."},{status:400});
     console.error("Confirm route unavailable",error instanceof Error?error.name:"Unknown");

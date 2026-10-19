@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { readBoundedJson,RequestBodyError } from "@/lib/http/bounded-body";
 import { ZodError } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -14,9 +15,7 @@ export async function POST(request:NextRequest) {
     const userClient=await createServerSupabaseClient();
     const {data:auth,error:authError}=await userClient.auth.getUser();
     if(authError||!auth.user) return NextResponse.json({error:"Sign in before saving."},{status:401});
-    const raw=await request.text();
-    if(raw.length>160000) return NextResponse.json({error:"Delivery payload is too large."},{status:413});
-    const parsed=createDeliverySchema.parse(JSON.parse(raw));
+    const parsed=createDeliverySchema.parse(await readBoundedJson(request));
     // Actual reconciliation runs on the server. Ignore all browser-provided outcomes.
     evaluateSubmission(parsed);
     const admin=createAdminClient();
@@ -37,6 +36,8 @@ export async function POST(request:NextRequest) {
       id:data.id,version:current.version,status:current.status,replayed:data.replayed,
     },{status:data.replayed?200:201});
   } catch(error) {
+    if(error instanceof RequestBodyError)
+      return NextResponse.json({error:error.message},{status:error.status});
     if(error instanceof ZodError) return NextResponse.json({error:"Invalid delivery fields.",details:error.issues.map(x=>x.message)},{status:400});
     if(error instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
     // Avoid exposing internal database or network exception text to clients.

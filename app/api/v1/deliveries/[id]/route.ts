@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { readBoundedJson,RequestBodyError } from "@/lib/http/bounded-body";
 import { ZodError, z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -16,9 +17,7 @@ export async function PUT(request:NextRequest,{params}:{params:Promise<{id:strin
     const user=await createServerSupabaseClient();
     const {data:auth,error:authError}=await user.auth.getUser();
     if(authError||!auth.user) return NextResponse.json({error:"Authentication required."},{status:401});
-    const body=await request.text();
-    if(body.length>160000) return NextResponse.json({error:"Delivery payload is too large."},{status:413});
-    const input=updateDeliverySchema.parse(JSON.parse(body));
+    const input=updateDeliverySchema.parse(await readBoundedJson(request));
     evaluateSubmission(input);
     const admin=createAdminClient();
     // Check owner and status before invoking the atomic DB function.
@@ -46,6 +45,8 @@ export async function PUT(request:NextRequest,{params}:{params:Promise<{id:strin
     }
     return NextResponse.json({id:data.id,status:data.status,version:data.version});
   } catch(error) {
+    if(error instanceof RequestBodyError)
+      return NextResponse.json({error:error.message},{status:error.status});
     if(error instanceof ZodError || error instanceof SyntaxError)
       return NextResponse.json({error:"Invalid draft fields."},{status:400});
     console.error("Draft update unavailable",error instanceof Error?error.name:"Unknown");
