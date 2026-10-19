@@ -21,13 +21,22 @@ KiranaProof is an invoice-first, multilingual delivery reconciliation and discre
 - Retailer alone records the final outcome (replacement, credit, or other); supplier cannot mark a claim settled.
 - Store-level RLS, server-only mutation RPCs, restrictive API-origin policy and audit events.
 
-**Not yet implemented:** real Gnani voice recognition/extraction, OCR, automatic messaging, production deployment. The live authenticated browser → Supabase workflow is not yet accepted.
+### Voice-assisted exception entry (Milestone 5 — development branch)
+- An authenticated Next.js endpoint for **real Gnani Prisma REST STT**, with server-only `X-API-Key-ID` and support for Telugu (`te-IN`) or Indian English (`en-IN`).
+- Microphone capture (up to 20 seconds), resampling to 16 kHz mono PCM WAV, editable transcript and typed fallback.
+- Conservative invoice-scoped shortage/damage proposals; ambiguous values, wrong items/variants or unbilled goods trigger clarification/manual handling.
+- **Voice can only populate unverified receipt fields**. Every remaining item, unit and damage status must be checked by the retailer.
+- When `GNANI_MODE` is not `live` or `GNANI_API_KEY` is absent, transcription returns a clear unavailable message. It does not fake speech recognition.
+- Tests include the documented multipart Gnani protocol using a simulated HTTP transport and **40 synthetic Telugu-English extraction fixtures**. These are not real audio or vendor-accuracy benchmarks.
+
+**Not yet implemented:** verified live Gnani transcription with real credentials, OCR, automatic messaging, and public deployment. Real browser authentication → Supabase integration acceptance is still pending.
 
 ## Branch and PR workflow
 
 - Milestone 3: [PR #7](https://github.com/navadeep-17/KiranaProof/pull/7), still a draft pending real signed-in localhost integration.
 - Milestone 4: [PR #8](https://github.com/navadeep-17/KiranaProof/pull/8), stacked on the M3 feature branch rather than main; **do not merge until M3 is verified**.
-- Neither PR is a public deployment. Claims must not be presented as production-ready.
+- Milestone 5: [PR #9](https://github.com/navadeep-17/KiranaProof/pull/9), stacked on M4; genuine Gnani adapter, audio capture and conservative extraction. Live Gnani credentials have not been provided.
+- None of these PRs constitutes public deployment or a verified production-grade voice pipeline.
 
 ## Run locally
 
@@ -52,7 +61,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Playwright browser tests use mocked save API responses; they do **not** prove a real signed-in session and database write work. Separate rollback-only SQL tests validate the database commands.
+Ordinary Playwright browser tests mock selected save API responses and do **not** establish a live signed-in Supabase workflow. The opt-in `e2e/live-connected.spec.ts` uses **real** Supabase Auth, delivery APIs, supplier link and response without mocks. See [local integration instructions](docs/local-integration.md) for the private development account and environment requirements. This live test is disabled in normal CI.
 
 ## Critical product rules
 
@@ -67,10 +76,12 @@ Playwright browser tests use mocked save API responses; they do **not** prove a 
 
 ## Verification and specifications
 
-- GitHub CI on current M4 branch: **57 unit/domain tests**, **10 desktop/mobile Playwright tests**, TypeScript and production build passed.
+- GitHub CI on the M5 branch covers reconciliation, supplier claims, voice parsing, audio/protocol handling and desktop/mobile browser tests. Check the latest GitHub Actions run for the actual totals.
 - Database: `supabase/tests/draft-lifecycle-smoke.sql`, `supabase/tests/rls-isolation-smoke.sql`, `supabase/tests/claim-lifecycle-smoke.sql` — admin-only, synthetic and entirely rolled back.
 - [Milestone 3 acceptance checklist](docs/milestone3-acceptance.md)
 - [Milestone 4 acceptance checklist](docs/milestone4-acceptance.md)
+- [Milestone 5 voice integration](docs/milestone5-voice.md)
+- [Local real-auth integration](docs/local-integration.md)
 - [KiranaProof PRD v1.2](https://docs.google.com/document/d/18PgRI6DVQoKdjv-4Kh51fu59qxJ8yAVe_dKpYMLxomU/edit)
 
-Development priority: finish real localhost authentication and persistence acceptance, then integrate the claim lifecycle, then genuine Gnani voice, then release hardening. **Deployment stays deferred.**
+Development priority: finish real localhost authentication and claim-flow acceptance, obtain Gnani credentials privately for actual voice verification, evaluate voice errors and clarify edge cases, then release hardening. **Deployment stays deferred.**

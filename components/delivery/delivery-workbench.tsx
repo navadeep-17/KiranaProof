@@ -12,6 +12,8 @@ import { reconcile, ReconciliationInputError } from "@/lib/reconciliation/engine
 import type { ReconciliationResult } from "@/lib/reconciliation/types";
 import { toDeliveryDraft } from "@/lib/reconciliation/form";
 import { getReplayResolution } from "@/lib/deliveries/replay-policy";
+import { VoiceExceptions } from "@/components/voice/voice-exceptions";
+import type { VoiceSuggestion } from "@/lib/voice/exceptions";
 import type { InvoiceEntry, ReceiptEntry, UnexpectedEntry } from "@/lib/reconciliation/form";
 
 const units = ["carton", "box", "pack", "piece", "bag", "kg", "litre", "bottle"];
@@ -205,6 +207,20 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
     invalidate();
   };
 
+  const applyVoiceSuggestion = (suggestion:VoiceSuggestion) => {
+    // Never auto-check a receipt line. Condition and unmentioned items stay unknown.
+    setReceipts(rows=>rows.map(row=>{
+      if(row.invoiceLineId!==suggestion.invoiceLineId)return row;
+      const currentInvoice=invoice.find(line=>line.id===row.invoiceLineId);
+      if(!currentInvoice||currentInvoice.unit!==suggestion.unit)return row;
+      return {
+        ...row,verified:false,
+        ...(suggestion.suggestedReceived!==null?{received:suggestion.suggestedReceived}:{}),
+        ...(suggestion.suggestedDamaged!==null?{damaged:suggestion.suggestedDamaged}:{}),
+      };
+    }));
+    invalidate();
+  };
   const updateReceipt = (id: string, patch: Partial<ReceiptEntry>) => {
     setReceipts((rows) => rows.map((r) => r.invoiceLineId === id ? { ...r, ...patch, verified: false } : r));
     invalidate();
@@ -491,6 +507,7 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
 
         {step === 1 && (
           <div className="space-y-5">
+            <VoiceExceptions invoice={invoice} onApply={applyVoiceSuggestion}/>
             <section className="surface rounded-[22px] p-5 sm:p-7">
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div><p className="kicker">02 / Receipt verification</p><h2 className="mt-1 text-xl font-extrabold tracking-[-.03em]">What actually arrived?</h2><p className="mt-1 text-xs text-[#82908e]">{verifiedCount} of {invoice.length} lines explicitly verified</p></div>
