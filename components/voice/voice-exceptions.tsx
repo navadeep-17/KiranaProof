@@ -2,7 +2,7 @@
 import { useRef,useState } from "react";
 import { Mic,Square,MessageCircleQuestion,ChevronRight,AudioLines } from "lucide-react";
 import type { InvoiceEntry } from "@/lib/reconciliation/form";
-import { extractVoiceException,type VoiceSuggestion } from "@/lib/voice/exceptions";
+import { extractVoiceExceptions,type VoiceSuggestion } from "@/lib/voice/exceptions";
 import { recordingToWav } from "@/lib/voice/browser-audio";
 
 export function VoiceExceptions({
@@ -17,7 +17,7 @@ export function VoiceExceptions({
  const [busy,setBusy]=useState(false);
  const [recording,setRecording]=useState(false);
  const [message,setMessage]=useState<string|null>(null);
- const [suggestions,setSuggestions]=useState<ReturnType<typeof extractVoiceException>|null>(null);
+ const [suggestions,setSuggestions]=useState<ReturnType<typeof extractVoiceExceptions>|null>(null);
  const recorder=useRef<MediaRecorder|null>(null);
  const timer=useRef<ReturnType<typeof setTimeout>|null>(null);
 
@@ -73,7 +73,7 @@ export function VoiceExceptions({
  }
  function stop(){if(recorder.current?.state==="recording")recorder.current.stop();}
  function analyze(){
-   const result=extractVoiceException(transcript,invoice);
+   const result=extractVoiceExceptions(transcript,invoice);
    setSuggestions(result);
    if(result.suggestions.length===0)setMessage("More detail is needed before proposing an invoice change.");
    else setMessage("Suggestion only. Check quantity and damage before verifying this receipt line.");
@@ -87,7 +87,7 @@ export function VoiceExceptions({
     <p className="kicker">Voice-assisted exceptions</p>
     <h2 id="voice-title" className="mt-1 text-lg font-extrabold">Speak what went wrong</h2>
     <p className="mt-2 text-xs leading-5 text-[#79878b]">
-     Optional short Telugu-English voice clips. Only exact, reviewable suggestions appear below.
+     Optional short Telugu-English voice clips. Each item needs a name, quantity, unit and issue. You can separate independent exceptions with commas or “and”.
      The other invoice lines remain unchecked.
     </p>
    </div>
@@ -136,7 +136,7 @@ export function VoiceExceptions({
       {s.suggestedReceived!==null?`Suggested received: ${s.suggestedReceived} ${s.unit} (based on billed quantity)`:
        `Suggested damaged: ${s.suggestedDamaged} ${s.unit}; received count is still unknown`}
     </p>
-    <button className="btn btn-primary mt-4" type="button" onClick={()=>{onApply(s);setSuggestions(null);setMessage("Suggested values copied into the receipt. Verify product, received quantity and damage manually.");}}>
+    <button className="btn btn-primary mt-4" type="button" onClick={()=>{onApply(s);setSuggestions(prev=>prev?{...prev,suggestions:prev.suggestions.filter((_,index)=>index!==i)}:null);setMessage("Suggestion copied without verification. Review every received and damaged quantity manually.");}}>
       Copy suggestion into receipt — do not verify
     </button>
    </div>)}
