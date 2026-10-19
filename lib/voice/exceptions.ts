@@ -97,7 +97,6 @@ export function extractVoiceException(transcript:string,invoice:InvoiceEntry[]):
  if(isMissing && affected>expected) return {
    suggestions:[],questions:[`A shortage of ${affected} exceeds the invoice quantity ${expected}. Confirm the quantity.`],verified:false,
  };
- }
  const suggestion:VoiceSuggestion={
    invoiceLineId:line.id,productName:line.productName,unit:line.unit,
    issueType:isMissing?"SHORTAGE":"DAMAGE",affectedQuantity:affected,
