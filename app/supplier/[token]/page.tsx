@@ -41,7 +41,7 @@ export default async function SupplierClaimPage({params}:{params:Promise<{token:
             <span className="text-[11px] font-extrabold text-[#b46b3d]">{item.issueType.replaceAll("_"," ")}</span>
             <div className="mt-1 font-bold">{item.productName}</div>
             <p className="mt-1 text-xs text-[#77838a]">{item.detail}</p>
-            {item.retailerNote && <p className="mt-2 text-sm text-[#456f54]">Retailer note: {item.retailerNote}</p>
+            {item.retailerNote && <p className="mt-2 text-sm text-[#456f54]">Retailer note: {item.retailerNote}</p>}
             <p className="mt-2 text-sm font-semibold">{item.affectedQuantity??"See details"} {item.unit} affected</p>
           </div>
         )}</div>
