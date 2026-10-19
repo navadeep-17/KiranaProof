@@ -29,3 +29,10 @@ A complete, explicitly verified invoice comparison is a precondition for `RECONC
 
 ## Collaboration
 Every milestone is a feature branch and reviewed pull request. Do not commit API keys or actual shop/customer private data. Run CI before merge and keep main deployable.
+
+## Milestone 3 implementation update (2026-10-19)
+- Seven RLS-secured tables deployed to the dedicated KiranaProof Supabase project.
+- Server-only transactional create and versioned confirm RPCs implemented and exercised in rollback-only SQL smoke tests.
+- Next.js auth pages, saved-delivery workbench action, dashboard and delivery detail route built.
+- Remaining release checks: configure environment safely, live browser sign-up/save/confirm test, reproducible lockfile, then formal merge/release review.
+- Status: **Draft PR #7** until release checks are satisfied.
