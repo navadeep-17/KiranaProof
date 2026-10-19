@@ -4,8 +4,18 @@ import { approveClaimSchema, issueShareLinkSchema, supplierResponseSchema, resol
 import { createSupplierToken,hashSupplierToken,isSupplierToken } from "../lib/claims/token-core.ts";
 
 test("explicit approval is required and version is mandatory",()=>{
-  assert.equal(approveClaimSchema.safeParse({approved:true,expectedVersion:2}).success,true);
-  for(const item of [{expectedVersion:2},{approved:false,expectedVersion:2},{approved:true,expectedVersion:0},{approved:true,expectedVersion:2,status:"RECONCILED"}]){
+  const reviewedItems=[{index:0,note:"Please replace missing goods."}];
+  assert.equal(approveClaimSchema.safeParse({approved:true,expectedVersion:2,reviewedItems}).success,true);
+  for(const item of [
+    {expectedVersion:2,reviewedItems},
+    {approved:false,expectedVersion:2,reviewedItems},
+    {approved:true,expectedVersion:0,reviewedItems},
+    {approved:true,expectedVersion:2,reviewedItems,status:"RECONCILED"},
+    {approved:true,expectedVersion:2,reviewedItems:[]},
+    {approved:true,expectedVersion:2,reviewedItems:[{index:0,note:""},{index:0,note:"Duplicate"}]},
+    {approved:true,expectedVersion:2,reviewedItems:[{index:-1,note:""}]},
+    {approved:true,expectedVersion:2,reviewedItems:[{index:0,note:"",affectedQuantity:999}]},
+  ]){
     assert.equal(approveClaimSchema.safeParse(item).success,false);
   }
 });

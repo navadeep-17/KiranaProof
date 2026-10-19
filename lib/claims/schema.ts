@@ -3,7 +3,15 @@ import { z } from "zod";
 export const approveClaimSchema = z.object({
   approved: z.literal(true),
   expectedVersion: z.number().int().positive(),
-}).strict();
+  reviewedItems: z.array(z.object({
+    index: z.number().int().min(0).max(74),
+    note: z.string().trim().max(500),
+  }).strict()).min(1).max(75),
+}).strict().superRefine((value,ctx)=>{
+  const ids=value.reviewedItems.map(item=>item.index);
+  if(new Set(ids).size!==ids.length)
+    ctx.addIssue({code:"custom",path:["reviewedItems"],message:"Each finding can be selected only once."});
+});
 
 export const issueShareLinkSchema = z.object({
   confirmShare: z.literal(true),

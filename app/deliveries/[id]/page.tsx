@@ -85,7 +85,7 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
             View approved claim ({existingClaim.status.replaceAll("_"," ")})
           </Link>
         ) : (
-          <ApproveClaimButton deliveryId={delivery.id} version={delivery.version}/>
+          <ApproveClaimButton deliveryId={delivery.id} version={delivery.version} items={issues}/>
         )
       )}
       <section className="surface mt-6 rounded-[20px] p-5 sm:p-7">
