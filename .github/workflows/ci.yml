@@ -16,5 +16,10 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --no-audit --no-fund
+      - name: Capture dependency lockfile for a reproducible build
+        run: |
+          echo '__KIRANAPROOF_LOCK_START__'
+          cat package-lock.json
+          echo '__KIRANAPROOF_LOCK_END__'
       - run: npm run check
       - run: npm run build
