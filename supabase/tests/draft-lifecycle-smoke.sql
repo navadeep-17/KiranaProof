@@ -9,7 +9,7 @@ declare
   owner_id uuid := gen_random_uuid();
   outsider_id uuid := gen_random_uuid();
   request_id uuid := gen_random_uuid();
-  delivery_id uuid;
+  v_delivery_id uuid;
   original jsonb;
   completed jsonb;
   created jsonb;
@@ -26,43 +26,43 @@ begin
      "receipts":[],"unexpected":[]}'::jsonb;
 
   created := public.kp_save_delivery(owner_id,request_id,original);
-  delivery_id := (created->>'id')::uuid;
-  if (select status from public.deliveries where id=delivery_id) <> 'NEEDS_REVIEW' then
+  v_delivery_id := (created->>'id')::uuid;
+  if (select status from public.deliveries where id=v_delivery_id) <> 'NEEDS_REVIEW' then
     raise exception 'Incomplete delivery was not saved pending review';
   end if;
-  if (public.kp_save_delivery(owner_id,request_id,original)->>'id') <> delivery_id::text then
+  if (public.kp_save_delivery(owner_id,request_id,original)->>'id') <> v_delivery_id::text then
     raise exception 'Idempotent create failed';
   end if;
 
   completed := jsonb_set(jsonb_set(original,'{invoiceCompleteConfirmed}','true'::jsonb),'{unexpectedItemsChecked}','true'::jsonb);
   completed := jsonb_set(completed,'{receipts}',
      '[{"invoiceLineId":"soap","productName":"Soap","variant":"Box","unit":"box","received":"8","damaged":"0","verified":true}]'::jsonb);
-  edited := public.kp_update_delivery(owner_id,delivery_id,1,completed);
+  edited := public.kp_update_delivery(owner_id,v_delivery_id,1,completed);
   if (edited->>'version') <> '2' then raise exception 'Edit did not bump version'; end if;
-  if (select count(*) from public.receipt_lines where delivery_id=delivery_id) <> 1 then
+  if (select count(*) from public.receipt_lines where delivery_id=v_delivery_id) <> 1 then
     raise exception 'Edit did not replace receipt lines';
   end if;
 
   begin
-    perform public.kp_update_delivery(owner_id,delivery_id,1,completed);
+    perform public.kp_update_delivery(owner_id,v_delivery_id,1,completed);
     raise exception 'TEST_FAILURE_STALE_UPDATE_ACCEPTED';
   exception when others then
     if sqlerrm = 'TEST_FAILURE_STALE_UPDATE_ACCEPTED' then raise; end if;
   end;
 
   begin
-    perform public.kp_update_delivery(outsider_id,delivery_id,2,completed);
+    perform public.kp_update_delivery(outsider_id,v_delivery_id,2,completed);
     raise exception 'TEST_FAILURE_CROSS_OWNER_UPDATE_ACCEPTED';
   exception when others then
     if sqlerrm = 'TEST_FAILURE_CROSS_OWNER_UPDATE_ACCEPTED' then raise; end if;
   end;
 
-  finalized := public.kp_confirm_delivery(owner_id,delivery_id,2,
+  finalized := public.kp_confirm_delivery(owner_id,v_delivery_id,2,
     '{"result":"RECONCILED","fullyVerified":true,"discrepancies":[],"unresolved":[]}'::jsonb);
   if (finalized->>'status') <> 'RECONCILED' then raise exception 'Expected clean confirmation'; end if;
 
   begin
-    perform public.kp_update_delivery(owner_id,delivery_id,3,completed);
+    perform public.kp_update_delivery(owner_id,v_delivery_id,3,completed);
     raise exception 'TEST_FAILURE_CONFIRMED_UPDATE_ACCEPTED';
   exception when others then
     if sqlerrm = 'TEST_FAILURE_CONFIRMED_UPDATE_ACCEPTED' then raise; end if;
