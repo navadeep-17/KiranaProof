@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Boxes, CheckCircle2, ClipboardList } from "lucide-react";
+import { ArrowLeft, Boxes, CheckCircle2, ClipboardList, Pencil } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 export const dynamic="force-dynamic";
 
@@ -30,6 +30,11 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
       <p className="kicker mt-8">Saved delivery record</p>
       <h1 className="mt-2 text-3xl font-extrabold tracking-[-.04em]">{delivery.reference_number}</h1>
       <p className="mt-2 text-sm text-[#71818b]">{delivery.baseline_type} · {delivery.delivery_date}</p>
+      {["DRAFT","NEEDS_REVIEW"].includes(delivery.status) && (
+        <Link href={`/deliveries/${delivery.id}/edit`} className="btn btn-primary mt-5">
+          <Pencil size={16}/> Resume and finish verification
+        </Link>
+      )}
       <div className={"mt-7 rounded-[20px] border p-6 "+(delivery.status==="RECONCILED"?"border-[#cee7d5] bg-[#f1faf3]":delivery.status==="HAS_DISCREPANCY"?"border-[#eedaca] bg-[#fff6ef]":"border-[#e8dfcc] bg-[#fffaf1]")}>
         <h2 className="flex items-center gap-2 text-xl font-extrabold">
           <CheckCircle2 size={21}/>{delivery.status==="RECONCILED"?"Reconciled — no claim created":delivery.status==="HAS_DISCREPANCY"?"Discrepancy confirmed":"Draft — still needs review"}
@@ -37,7 +42,7 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
         <p className="mt-2 text-sm leading-6 text-[#63777d]">
           {delivery.status==="RECONCILED"?"All invoice lines matched and were confirmed. No supplier action is required.":
             delivery.status==="HAS_DISCREPANCY"?"Differences are stored. A supplier claim is not created until separately approved in the next milestone.":
-            "This draft has not been confirmed. Editing and resuming drafts will be available soon."}
+            "This draft has not been confirmed. Resume verification to correct missing information and save again."}
         </p>
       </div>
       <section className="surface mt-6 rounded-[20px] p-5 sm:p-7">

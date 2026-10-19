@@ -124,25 +124,43 @@ function IssueCard({
   );
 }
 
-export function DeliveryWorkbench() {
+export interface SavedWorkbenchDraft {
+  id: string;
+  version: number;
+  storeName: string;
+  supplierName: string;
+  referenceNumber: string;
+  baselineType: "INVOICE" | "ORDER";
+  invoice: InvoiceEntry[];
+  receipts: ReceiptEntry[];
+  unexpected: UnexpectedEntry[];
+  invoiceCompleteConfirmed: boolean;
+  unexpectedItemsChecked: boolean;
+}
+
+export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbenchDraft }) {
   const router = useRouter();
-  const [storeName,setStoreName] = useState("My Kirana Store");
+  const [storeName,setStoreName] = useState(initialDraft?.storeName ?? "My Kirana Store");
+  const [stored,setStored] = useState<{id:string,version:number,status:string}|null>(
+    initialDraft ? {id:initialDraft.id,version:initialDraft.version,status:"NEEDS_REVIEW"} : null
+  );
+  const [saveMessage,setSaveMessage] = useState<string | null>(null);
   const [saving,setSaving] = useState(false);
   const [requestKey,setRequestKey] = useState<string | null>(null);
-  const [savedDelivery,setSavedDelivery] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
-  const [supplier, setSupplier] = useState("");
-  const [reference, setReference] = useState("");
-  const [baselineType, setBaselineType] = useState<"INVOICE" | "ORDER">("INVOICE");
-  const [invoice, setInvoice] = useState<InvoiceEntry[]>(initialInvoice);
-  const [invoiceComplete, setInvoiceComplete] = useState(false);
-  const [receipts, setReceipts] = useState<ReceiptEntry[]>([]);
-  const [unexpected, setUnexpected] = useState<UnexpectedEntry[]>([]);
-  const [unexpectedChecked, setUnexpectedChecked] = useState(false);
+  const [savedDelivery,setSavedDelivery] = useState<string | null>(initialDraft?.id ?? null);
+  const [step, setStep] = useState(initialDraft?.invoiceCompleteConfirmed ? 1 : 0);
+  const [supplier, setSupplier] = useState(initialDraft?.supplierName ?? "");
+  const [reference, setReference] = useState(initialDraft?.referenceNumber ?? "");
+  const [baselineType, setBaselineType] = useState<"INVOICE" | "ORDER">(initialDraft?.baselineType ?? "INVOICE");
+  const [invoice, setInvoice] = useState<InvoiceEntry[]>(initialDraft?.invoice ?? initialInvoice);
+  const [invoiceComplete, setInvoiceComplete] = useState(initialDraft?.invoiceCompleteConfirmed ?? false);
+  const [receipts, setReceipts] = useState<ReceiptEntry[]>(initialDraft?.receipts ?? []);
+  const [unexpected, setUnexpected] = useState<UnexpectedEntry[]>(initialDraft?.unexpected ?? []);
+  const [unexpectedChecked, setUnexpectedChecked] = useState(initialDraft?.unexpectedItemsChecked ?? false);
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const invalidate = () => { setResult(null); setError(null); setRequestKey(null); setSavedDelivery(null); };
+  const invalidate = () => { setResult(null); setError(null); setSaveMessage(null); if(!stored) setRequestKey(null); };
   const updateInvoice = (id: string, patch: Partial<InvoiceEntry>) => {
     setInvoice((rows) => rows.map((row) => row.id === id ? { ...row, ...patch } : row));
     setInvoiceComplete(false);
@@ -261,36 +279,54 @@ export function DeliveryWorkbench() {
     }
   };
 
+  const saveSnapshot = async () => {
+    // Browser status is advisory only; both API paths recompute the domain inputs.
+    toDeliveryDraft({invoice,receipts,unexpected,invoiceCompleteConfirmed:invoiceComplete,unexpectedItemsChecked:unexpectedChecked});
+    if(!storeName.trim() || !supplier.trim() || !reference.trim())
+      throw new Error("Shop, supplier and invoice reference are required.");
+    const payload={
+      storeName,supplierName:supplier,referenceNumber:reference,baselineType,
+      invoice,receipts,unexpected,invoiceCompleteConfirmed:invoiceComplete,
+      unexpectedItemsChecked:unexpectedChecked,
+    };
+    const id=requestKey ?? crypto.randomUUID();
+    if(!stored) setRequestKey(id);
+    const url=stored ? `/api/v1/deliveries/${encodeURIComponent(stored.id)}` : "/api/v1/deliveries";
+    const response=await fetch(url,{
+      method:stored?"PUT":"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(stored ? {...payload,expectedVersion:stored.version} : {...payload,clientRequestId:id}),
+    });
+    const data=await response.json();
+    if(!response.ok) {
+      if(response.status===401) throw new Error("Sign in to save. You can open the login page in another tab.");
+      throw new Error(data.error ?? "Unable to save changes.");
+    }
+    setStored({id:data.id,version:data.version,status:data.status});
+    setSavedDelivery(data.id);
+    return data as {id:string,version:number,status:string};
+  };
+  const saveDraft = async () => {
+    if(saving) return;
+    setSaving(true);setError(null);setSaveMessage(null);
+    try {
+      await saveSnapshot();
+      setSaveMessage("Draft saved securely. You can leave this page and resume it from your dashboard.");
+      router.refresh();
+    } catch(cause) {
+      setError(cause instanceof Error?cause.message:"Unable to save draft.");
+    } finally { setSaving(false); }
+  };
   const saveAndConfirm = async () => {
-    if(!result || result.result==="NEEDS_REVIEW") {
-      setError("Resolve all checks before confirming the delivery.");
+    if(!result || !result.fullyVerified || result.result==="NEEDS_REVIEW") {
+      setError("Resolve every pending check before confirmation.");
       return;
     }
     if(saving) return;
-    setSaving(true);
-    setError(null);
+    setSaving(true);setError(null);setSaveMessage(null);
     try {
-      const id=requestKey ?? crypto.randomUUID();
-      setRequestKey(id);
-      const saved=await fetch("/api/v1/deliveries",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          clientRequestId:id,storeName,supplierName:supplier,referenceNumber:reference,
-          baselineType,invoice,receipts,unexpected,
-          invoiceCompleteConfirmed:invoiceComplete,unexpectedItemsChecked:unexpectedChecked,
-        }),
-      });
-      const data=await saved.json();
-      if(!saved.ok) {
-        if(saved.status===401) throw new Error("Sign in first to save. The current workbench stays open so you can sign in in a second tab.");
-        throw new Error(data.error ?? "Unable to save delivery.");
-      }
-      setSavedDelivery(data.id);
-      if(data.status==="RECONCILED" || data.status==="HAS_DISCREPANCY") {
-        router.push(`/deliveries/${encodeURIComponent(data.id)}`);
-        router.refresh();
-        return;
+      const data=await saveSnapshot();
+      if(["RECONCILED","HAS_DISCREPANCY"].includes(data.status)){
+        router.push(`/deliveries/${encodeURIComponent(data.id)}`);router.refresh();return;
       }
       const confirmed=await fetch(`/api/v1/deliveries/${encodeURIComponent(data.id)}/confirm`,{
         method:"POST",headers:{"Content-Type":"application/json"},
@@ -298,13 +334,10 @@ export function DeliveryWorkbench() {
       });
       const confirmation=await confirmed.json();
       if(!confirmed.ok) throw new Error(confirmation.error ?? "Saved as draft, but could not confirm.");
-      router.push(`/deliveries/${encodeURIComponent(data.id)}`);
-      router.refresh();
-    }catch(cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save delivery.");
-    }finally {
-      setSaving(false);
-    }
+      router.push(`/deliveries/${encodeURIComponent(data.id)}`);router.refresh();
+    }catch(cause){
+      setError(cause instanceof Error?cause.message:"Could not confirm delivery.");
+    }finally {setSaving(false);}
   };
 
   const verifiedCount = receipts.filter((r) => r.verified).length;
@@ -333,7 +366,7 @@ export function DeliveryWorkbench() {
             <h1 className="mt-2 text-[clamp(2rem,4vw,2.8rem)] font-extrabold tracking-[-.055em] text-[#152b3c]">Verify a delivery</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6a7987]">Compare the complete invoice with the actual goods received. Unknown details remain pending until you verify them.</p>
           </div>
-          <button onClick={loadSample} className="btn btn-outline shrink-0"><WandSparkles size={16}/> Load sample invoice</button>
+          {!initialDraft && <button onClick={loadSample} className="btn btn-outline shrink-0"><WandSparkles size={16}/> Load sample invoice</button>}
         </div>
 
         <div className="mb-6 rounded-xl border border-[#dce7ea] bg-[#eef5f7] px-4 py-3 text-xs leading-5 text-[#456274]">
@@ -355,6 +388,7 @@ export function DeliveryWorkbench() {
           ))}
         </div>
 
+        {saveMessage && <div role="status" className="mb-5 rounded-xl border border-[#c7e5d1] bg-[#effaf2] px-4 py-3 text-sm font-medium text-[#2e6b4d]">{saveMessage} {savedDelivery && <Link href={`/deliveries/${savedDelivery}`} className="underline">View saved record</Link>}</div>}
         {error && <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-[#ebc5b7] bg-[#fff0ea] px-4 py-4 text-sm text-[#93432e]"><TriangleAlert className="shrink-0" size={19}/>{error}</div>}
 
         {step === 0 && (
@@ -404,7 +438,7 @@ export function DeliveryWorkbench() {
                 </CheckLine>
               </div>
             </section>
-            <div className="flex justify-end"><button className="btn btn-primary w-full sm:w-auto" onClick={goToReceipts}>Continue to received items <ArrowRight size={17}/></button></div>
+            <div className="flex flex-col justify-end gap-3 sm:flex-row"><button disabled={saving} className="btn btn-outline" onClick={saveDraft}>{saving?"Saving...":"Save incomplete draft"}</button><button className="btn btn-primary" onClick={goToReceipts}>Continue to received items <ArrowRight size={17}/></button></div>
           </div>
         )}
 
@@ -478,7 +512,10 @@ export function DeliveryWorkbench() {
             </section>
             <div className="flex flex-col-reverse justify-between gap-3 sm:flex-row">
               <button className="btn btn-outline" onClick={() => { setStep(0); setError(null); }}><ChevronLeft size={17}/> Edit invoice</button>
-              <button className="btn btn-primary" onClick={evaluate}>Run full reconciliation <ArrowRight size={17}/></button>
+              <div className="flex flex-wrap gap-3">
+                <button disabled={saving} className="btn btn-outline" onClick={saveDraft}>{saving?"Saving...":"Save draft"}</button>
+                <button className="btn btn-primary" onClick={evaluate}>Run full reconciliation <ArrowRight size={17}/></button>
+              </div>
             </div>
           </div>
         )}
@@ -541,7 +578,7 @@ export function DeliveryWorkbench() {
                   <CheckCircle2 size={17}/>{saving ? "Saving and confirming..." : result.result==="RECONCILED" ? "Confirm clean delivery & save" : "Confirm discrepancies & save"}
                 </button>
               )}
-              {!result.fullyVerified && <button className="btn btn-outline" onClick={() => {setStep(1);setError(null);}}>Resolve pending checks <ArrowRight size={16}/></button>}
+              {!result.fullyVerified && <div className="flex flex-wrap gap-3"><button disabled={saving} className="btn btn-outline" onClick={saveDraft}>{saving?"Saving...":"Save pending draft"}</button><button className="btn btn-outline" onClick={() => {setStep(1);setError(null);}}>Resolve pending checks <ArrowRight size={16}/></button></div>}
             </div>
           </div>
         )}

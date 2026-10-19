@@ -52,7 +52,7 @@ export const createDeliverySchema = z.object({
 export const confirmDeliverySchema=z.object({expectedVersion:z.number().int().positive()}).strict();
 export type CreateDeliveryInput=z.infer<typeof createDeliverySchema>;
 
-export function evaluateSubmission(value:CreateDeliveryInput) {
+export function evaluateSubmission(value:Omit<CreateDeliveryInput,"clientRequestId">) {
   return reconcile(toDeliveryDraft({
     invoice:value.invoice,receipts:value.receipts,unexpected:value.unexpected,
     invoiceCompleteConfirmed:value.invoiceCompleteConfirmed,

@@ -56,7 +56,12 @@ export default async function Dashboard() {
               {(deliveries ?? []).map((delivery) => (
                 <div key={delivery.id} className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm">
                   <div><Link href={`/deliveries/${delivery.id}`} className="font-bold underline underline-offset-4">{delivery.reference_number}</Link><p className="mt-1 text-xs text-[#85939a]">{delivery.delivery_date}</p></div>
-                  <span className="rounded-full bg-[#f3f6f4] px-3 py-1.5 text-xs font-bold text-[#4e685c]">{delivery.status}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-[#f3f6f4] px-3 py-1.5 text-xs font-bold text-[#4e685c]">{delivery.status}</span>
+                    {["DRAFT","NEEDS_REVIEW"].includes(delivery.status) && (
+                      <Link href={`/deliveries/${delivery.id}/edit`} className="text-xs font-semibold text-[#b16332] underline">Resume</Link>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
