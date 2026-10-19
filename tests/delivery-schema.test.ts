@@ -20,9 +20,13 @@ test("validated clean snapshot only has reconciled eligibility",()=>{
   assert.equal(result.result,"RECONCILED");
   assert.equal(result.canCreateClaim,false);
 });
-test("unconfirmed invoice is blocked",()=>{
+test("incomplete invoice is saveable but cannot be confirmed as reconciled",()=>{
   const p=request();p.invoiceCompleteConfirmed=false;
-  assert.equal(createDeliverySchema.safeParse(p).success,false);
+  const parsed=createDeliverySchema.parse(p);
+  const result=evaluateSubmission(parsed);
+  assert.equal(result.result,"NEEDS_REVIEW");
+  assert.equal(result.canMarkReconciled,false);
+  assert.equal(result.canCreateClaim,false);
 });
 test("client-supplied result field is rejected",()=>{
   assert.equal(createDeliverySchema.safeParse({...request(),result:"RECONCILED"}).success,false);

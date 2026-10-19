@@ -20,6 +20,15 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
     .select("invoice_line_id,received_product_name,received_variant,unit,received_qty,damaged_qty")
     .eq("delivery_id",id);
   if(linesError||receiptsError) throw new Error("Unable to load this delivery");
+  const {data:run,error:runError}=await db.from("reconciliation_runs")
+    .select("findings_json,result,run_at")
+    .eq("delivery_id",id).order("run_at",{ascending:false}).limit(1).maybeSingle();
+  if(runError) throw new Error("Unable to load reconciliation findings.");
+  const findings=(run?.findings_json && typeof run.findings_json==="object")
+    ? run.findings_json as {discrepancies?:{type:string;productName:string;affectedQuantity:number|null;unit:string;detail:string}[]}
+    : null;
+  const issues=Array.isArray(findings?.discrepancies)?findings.discrepancies:[];
+  const unexpected=(receipts??[]).filter(r=>r.invoice_line_id===null);
   const receiptMap=new Map((receipts??[]).filter(r=>r.invoice_line_id).map(r=>[r.invoice_line_id,r]));
   return <div className="min-h-screen bg-[#f7f7f2]">
     <header className="border-b bg-white"><div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-4 font-extrabold">
@@ -45,6 +54,27 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
             "This draft has not been confirmed. Resume verification to correct missing information and save again."}
         </p>
       </div>
+      {issues.length>0 && (
+        <section className="surface mt-6 rounded-[20px] p-5 sm:p-7">
+          <h2 className="text-lg font-extrabold">Confirmed discrepancy findings ({issues.length})</h2>
+          <div className="mt-4 space-y-3">{issues.map((finding,index)=>(
+            <div key={index} className="rounded-xl border border-[#f0dfcc] bg-[#fffaf4] p-4">
+              <div className="text-xs font-bold text-[#b16b3d]">{finding.type.replaceAll("_"," ")}</div>
+              <div className="mt-1 font-bold">{finding.productName}</div>
+              <p className="mt-1 text-xs text-[#777f82]">{finding.detail}</p>
+              <p className="mt-2 text-sm font-bold">{finding.affectedQuantity??"Unspecified"} {finding.unit} affected</p>
+            </div>
+          ))}</div>
+        </section>
+      )}
+      {unexpected.length>0 && <section className="surface mt-6 rounded-[20px] p-5 sm:p-7">
+        <h2 className="text-lg font-bold">Goods not listed on the invoice</h2>
+        <div className="mt-4 space-y-2">{unexpected.map((r,index)=>(
+          <div key={index} className="rounded-xl border p-3 text-sm">
+            <strong>{r.received_product_name}</strong> · {r.received_qty??"Unknown"} {r.unit} received, {r.damaged_qty??"Unknown"} damaged
+          </div>
+        ))}</div>
+      </section>}
       <section className="surface mt-6 rounded-[20px] p-5 sm:p-7">
         <h2 className="flex items-center gap-2 text-lg font-extrabold"><ClipboardList size={20}/> Invoice comparison</h2>
         <div className="mt-5 space-y-3">{(lines??[]).map(line=>{
