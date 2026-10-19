@@ -11,6 +11,7 @@ import {
 import { reconcile, ReconciliationInputError } from "@/lib/reconciliation/engine";
 import type { ReconciliationResult } from "@/lib/reconciliation/types";
 import { toDeliveryDraft } from "@/lib/reconciliation/form";
+import { getReplayResolution } from "@/lib/deliveries/replay-policy";
 import type { InvoiceEntry, ReceiptEntry, UnexpectedEntry } from "@/lib/reconciliation/form";
 
 const units = ["carton", "box", "pack", "piece", "bag", "kg", "litre", "bottle"];
@@ -147,6 +148,7 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
   const [saveMessage,setSaveMessage] = useState<string | null>(null);
   const [saving,setSaving] = useState(false);
   const [requestKey,setRequestKey] = useState<string | null>(null);
+  const [requestSnapshot,setRequestSnapshot] = useState<string | null>(null);
   const [savedDelivery,setSavedDelivery] = useState<string | null>(initialDraft?.id ?? null);
   const [step, setStep] = useState(initialDraft?.invoiceCompleteConfirmed ? 1 : 0);
   const [supplier, setSupplier] = useState(initialDraft?.supplierName ?? "");
@@ -160,7 +162,9 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const invalidate = () => { setResult(null); setError(null); setSaveMessage(null); if(!stored) setRequestKey(null); };
+  // Keep the same request ID after an uncertain save. A retry must find the
+  // original record rather than silently creating a duplicate delivery.
+  const invalidate = () => { setResult(null); setError(null); setSaveMessage(null); };
   const updateInvoice = (id: string, patch: Partial<InvoiceEntry>) => {
     setInvoice((rows) => rows.map((row) => row.id === id ? { ...row, ...patch } : row));
     setInvoiceComplete(false);
@@ -196,6 +200,8 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
     setUnexpected([]);
     setUnexpectedChecked(false);
     setStep(0);
+    setRequestKey(null);
+    setRequestSnapshot(null);
     invalidate();
   };
 
@@ -280,8 +286,9 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
   };
 
   const saveSnapshot = async () => {
-    // Browser status is advisory only; both API paths recompute the domain inputs.
-    toDeliveryDraft({invoice,receipts,unexpected,invoiceCompleteConfirmed:invoiceComplete,unexpectedItemsChecked:unexpectedChecked});
+    // The server is authoritative. Browser previews only help review the data.
+    toDeliveryDraft({invoice,receipts,unexpected,
+      invoiceCompleteConfirmed:invoiceComplete,unexpectedItemsChecked:unexpectedChecked});
     if(!storeName.trim() || !supplier.trim() || !reference.trim())
       throw new Error("Shop, supplier and invoice reference are required.");
     const payload={
@@ -289,21 +296,53 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
       invoice,receipts,unexpected,invoiceCompleteConfirmed:invoiceComplete,
       unexpectedItemsChecked:unexpectedChecked,
     };
+    const currentSnapshot=JSON.stringify(payload);
+    const previousSnapshot=requestSnapshot;
     const id=requestKey ?? crypto.randomUUID();
-    if(!stored) setRequestKey(id);
-    const url=stored ? `/api/v1/deliveries/${encodeURIComponent(stored.id)}` : "/api/v1/deliveries";
-    const response=await fetch(url,{
-      method:stored?"PUT":"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(stored ? {...payload,expectedVersion:stored.version} : {...payload,clientRequestId:id}),
-    });
-    const data=await response.json();
-    if(!response.ok) {
-      if(response.status===401) throw new Error("Sign in to save. You can open the login page in another tab.");
-      throw new Error(data.error ?? "Unable to save changes.");
+    const send=async (url:string,method:"POST"|"PUT",body:unknown) => {
+      let response:Response;
+      try {
+        response=await fetch(url,{
+          method,headers:{"Content-Type":"application/json"},
+          body:JSON.stringify(body),
+        });
+      }catch {
+        throw new Error("Connection lost. Your inputs are still here. Retry saving; do not start a new delivery.");
+      }
+      const data=await response.json().catch(()=>null);
+      if(!response.ok) {
+        if(response.status===401) throw new Error("Sign in before saving, then retry in this tab.");
+        if(response.status===409) throw new Error("This saved draft changed. Open its record and resume the latest version.");
+        throw new Error(data?.error ?? "Save did not complete. Retry or check your dashboard.");
+      }
+      if(!data || typeof data.id!=="string" || typeof data.version!=="number" || typeof data.status!=="string")
+        throw new Error("Unexpected save response. Retry to recover the saved delivery.");
+      return data as {id:string,version:number,status:string,replayed?:boolean};
+    };
+
+    let data:{id:string,version:number,status:string,replayed?:boolean};
+    if(stored) {
+      data=await send(`/api/v1/deliveries/${encodeURIComponent(stored.id)}`,"PUT",
+        {...payload,expectedVersion:stored.version});
+    }else{
+      // Store the idempotency key BEFORE an uncertain network operation.
+      setRequestKey(id);
+      setRequestSnapshot(currentSnapshot);
+      data=await send("/api/v1/deliveries","POST",{...payload,clientRequestId:id});
+      if(data.replayed && getReplayResolution(previousSnapshot,currentSnapshot,data.status)!=="REUSE") {
+        if(getReplayResolution(previousSnapshot,currentSnapshot,data.status)==="CONFIRMED_CONFLICT") {
+          setSavedDelivery(data.id);
+          throw new Error("This delivery was already confirmed. Open its saved record rather than replacing it.");
+        }
+        // Original create may have succeeded before the response was lost.
+        // Replay finds it, then safely applies the latest edits with a version check.
+        data=await send(`/api/v1/deliveries/${encodeURIComponent(data.id)}`,"PUT",
+          {...payload,expectedVersion:data.version});
+      }
     }
     setStored({id:data.id,version:data.version,status:data.status});
     setSavedDelivery(data.id);
-    return data as {id:string,version:number,status:string};
+    return data;
   };
   const saveDraft = async () => {
     if(saving) return;
@@ -389,7 +428,7 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
         </div>
 
         {saveMessage && <div role="status" className="mb-5 rounded-xl border border-[#c7e5d1] bg-[#effaf2] px-4 py-3 text-sm font-medium text-[#2e6b4d]">{saveMessage} {savedDelivery && <Link href={`/deliveries/${savedDelivery}`} className="underline">View saved record</Link>}</div>}
-        {error && <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-[#ebc5b7] bg-[#fff0ea] px-4 py-4 text-sm text-[#93432e]"><TriangleAlert className="shrink-0" size={19}/>{error}</div>}
+        {error && <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-[#ebc5b7] bg-[#fff0ea] px-4 py-4 text-sm text-[#93432e]"><TriangleAlert className="shrink-0" size={19}/><div>{error} {savedDelivery && <Link href={`/deliveries/${savedDelivery}`} className="ml-1 font-bold underline">View saved delivery</Link>}</div></div>}
 
         {step === 0 && (
           <div className="space-y-5">
