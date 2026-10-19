@@ -3,18 +3,32 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardCopy, CheckCircle2, Link2, ShieldCheck } from "lucide-react";
 
-export function ApproveClaimButton({deliveryId,version}:{deliveryId:string;version:number}) {
+export interface ClaimReviewItem {
+  type:string;productName:string;affectedQuantity:number|null;unit:string;detail:string;
+}
+export function ApproveClaimButton({
+  deliveryId,version,items,
+}:{
+  deliveryId:string;version:number;items:ClaimReviewItem[];
+}) {
   const router=useRouter();
+  const [included,setIncluded]=useState<number[]>(()=>items.map((_,index)=>index));
+  const [notes,setNotes]=useState<Record<number,string>>({});
   const [approved,setApproved]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string|null>(null);
   async function approve() {
-    if(!approved||busy) return;
+    if(!approved||busy||included.length===0) return;
     setBusy(true);setError(null);
     try {
       const response=await fetch(`/api/v1/deliveries/${deliveryId}/claim`,{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({approved:true,expectedVersion:version}),
+        body:JSON.stringify({
+          approved:true,expectedVersion:version,
+          reviewedItems:included.slice().sort((a,b)=>a-b).map(index=>({
+            index,note:notes[index]??"",
+          })),
+        }),
       });
       const data=await response.json();
       if(!response.ok) throw new Error(data.error??"Unable to approve claim.");
@@ -30,13 +44,48 @@ export function ApproveClaimButton({deliveryId,version}:{deliveryId:string;versi
       Review the affected items above. Approving creates a record for those differences only.
       It does not contact the supplier or send WhatsApp messages.
     </p>
+    <div className="mt-5 space-y-3">
+      {items.map((item,index)=>(
+        <div key={index} className="rounded-xl border border-[#e7dfd5] bg-[#fffdf9] p-4">
+          <label className="flex items-start gap-3 text-sm">
+            <input type="checkbox" className="soft-check mt-1"
+              aria-label={`Include ${item.type} for ${item.productName}`}
+              checked={included.includes(index)}
+              onChange={e=>setIncluded(previous=>e.target.checked
+                ? [...previous,index].sort((a,b)=>a-b)
+                : previous.filter(value=>value!==index))}/>
+            <span className="flex-1">
+              <strong>{item.productName}</strong>
+              <span className="ml-2 font-bold text-[#ad683b]">{item.type.replaceAll("_"," ")}</span>
+              <span className="mt-1 block text-xs text-[#65747c]">
+                {item.affectedQuantity??"Unspecified"} {item.unit} affected · {item.detail}
+              </span>
+            </span>
+          </label>
+          {included.includes(index) && (
+            <label className="mt-4 block text-xs font-semibold text-[#667782]">
+              Note to supplier (optional; does not change verified quantities)
+              <textarea className="input mt-2 min-h-20" maxLength={500}
+                value={notes[index]??""}
+                onChange={e=>setNotes(previous=>({...previous,[index]:e.target.value}))}
+                placeholder="e.g. Please replace damaged cartons."/>
+            </label>
+          )}
+        </div>
+      ))}
+    </div>
+    <p className="mt-3 text-xs leading-5 text-[#788690]">
+      You selected {included.length} of {items.length} confirmed issues.
+      Unselected issues remain visible on the delivery record but will not appear in this claim.
+      Product names, units and quantities cannot be modified here.
+    </p>
     <label className="mt-5 flex items-start gap-3 text-sm leading-6">
       <input type="checkbox" className="soft-check mt-1" checked={approved}
         onChange={e=>setApproved(e.target.checked)}/>
       <span>I reviewed the discrepancies and explicitly approve creating this claim.</span>
     </label>
     {error && <p role="alert" className="mt-3 text-sm text-[#ae412e]">{error}</p>}
-    <button className="btn btn-primary mt-5" type="button" disabled={!approved||busy} onClick={approve}>
+    <button className="btn btn-primary mt-5" type="button" disabled={!approved||busy||included.length===0} onClick={approve}>
       <ShieldCheck size={16}/>{busy?"Approving...":"Approve discrepancy claim"}
     </button>
   </section>;

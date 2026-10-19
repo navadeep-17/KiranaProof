@@ -16,7 +16,7 @@ export default async function ClaimDetail({params}:{params:Promise<{id:string}>}
   if(claimError||!claim) notFound();
   const [delivery,items,replies,events]=await Promise.all([
     db.from("deliveries").select("reference_number").eq("id",claim.delivery_id).single(),
-    db.from("claim_items").select("id,issue_type,product_name,unit,affected_qty,detail").eq("claim_id",id),
+    db.from("claim_items").select("id,issue_type,product_name,unit,affected_qty,detail,retailer_note").eq("claim_id",id),
     db.from("supplier_responses").select("response_type,note,responded_at").eq("claim_id",id).maybeSingle(),
     db.from("audit_events").select("id,event_type,created_at,actor_type").eq("delivery_id",claim.delivery_id)
       .order("created_at",{ascending:false}).limit(30),
@@ -46,6 +46,9 @@ export default async function ClaimDetail({params}:{params:Promise<{id:string}>}
             <span className="text-xs font-bold text-[#a86c40]">{item.issue_type.replaceAll("_"," ")}</span>
             <p className="mt-1 font-extrabold">{item.product_name}</p>
             <p className="mt-1 text-xs text-[#7c8790]">{item.detail}</p>
+            {item.retailer_note && <p className="mt-2 text-sm text-[#557467]">
+              Retailer note: {item.retailer_note}
+            </p>}
             <p className="mt-2 text-sm font-semibold">{item.affected_qty??"Unspecified"} {item.unit} affected</p>
           </div>
         )}</div>

@@ -114,3 +114,52 @@ export function extractVoiceException(transcript:string,invoice:InvoiceEntry[]):
  };
  return {suggestions:[suggestion],questions:[],verified:false};
 }
+
+/**
+ * Multiple independent spoken exceptions can be reviewed at once.
+ * This deliberately rejects compound clauses that cannot each be matched
+ * to exactly one invoice product, unit, quantity and issue type.
+ * Nothing here verifies a receipt, persists data, or issues a claim.
+ */
+export function extractVoiceExceptions(transcript:string,invoice:InvoiceEntry[]):ExtractionResult {
+  const source=transcript.trim();
+  if(!source) return extractVoiceException(source,invoice);
+  // Do not guess at long/unstructured dictation. Require short independently
+  // reviewable clauses, each naming its own product and unit.
+  const parts=source.split(/(?:[;,\n]+|\s+and\s+|\s+మరియు\s+|\s+అలాగే\s+)/iu)
+    .map(x=>x.trim()).filter(Boolean);
+  if(parts.length>5) return {
+    verified:false,suggestions:[],questions:["Describe no more than five exceptions at a time."],
+  };
+  if(parts.length===0) return extractVoiceException(source,invoice);
+  // "Parle G 2 cartons missing and damaged" describes one item with
+  // conflicting issue types, not two independent fully identified issues.
+  // Preserve the specific original clarification instead of showing a
+  // misleading "product not found" question for the second fragment.
+  if(parts.length>1 && parts.some(part=>
+    !invoice.some(line=>mentions(part,line.productName)) &&
+    numbers(part).length===0 &&
+    (shortage.test(part)||damage.test(part))
+  )) return extractVoiceException(source,invoice);
+  const suggestions:VoiceSuggestion[]=[];
+  const questions:string[]=[];
+  const seen=new Set<string>();
+  for(let i=0;i<parts.length;i++){
+    const output=extractVoiceException(parts[i]!,invoice);
+    if(output.questions.length){
+      questions.push(...output.questions.map(question=>`Part ${i+1}: ${question}`));
+      continue;
+    }
+    for(const suggestion of output.suggestions){
+      const key=`${suggestion.invoiceLineId}:${suggestion.issueType}`;
+      if(seen.has(key)){
+        questions.push(`Part ${i+1}: The same item and issue was mentioned twice. Confirm the actual quantity manually.`);
+      }else{
+        seen.add(key);suggestions.push(suggestion);
+      }
+    }
+  }
+  // A partial transcript is not safe for batch application. Clarify first.
+  if(questions.length)return {verified:false,suggestions:[],questions};
+  return {verified:false,suggestions,questions:[]};
+}

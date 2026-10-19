@@ -19,8 +19,9 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     const input=approveClaimSchema.safeParse(await request.json());
     if(!input.success) return NextResponse.json({error:"Review and explicitly approve the discrepancy before creating a claim."},{status:400});
     const admin=createAdminClient();
-    const {data,error}=await admin.rpc("kp_approve_claim",{
+    const {data,error}=await admin.rpc("kp_approve_reviewed_claim",{
       p_owner:auth.user.id,p_delivery:id,p_expected_version:input.data.expectedVersion,
+      p_selection:input.data.reviewedItems,
     });
     if(error) {
       if(error.code==="42501") return NextResponse.json({error:"Delivery not found."},{status:404});
