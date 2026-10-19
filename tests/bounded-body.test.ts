@@ -18,12 +18,12 @@ test("server does not trust a small Content-Length to override measured size",as
  const stream=new ReadableStream<Uint8Array>({
   start(controller){controller.enqueue(new TextEncoder().encode("a".repeat(120)));controller.close();}
  });
- const custom={headers:new Headers({"content-length":"2"}),body:stream};
+ const custom={headers:new Headers({"content-length":"2"}),body:stream as Request["body"]};
  await assert.rejects(readBoundedBody(custom,100),(e:unknown)=>
    e instanceof RequestBodyError&&e.status===413);
 });
 test("announced oversize body is rejected without consuming it",async()=>{
- const custom={headers:new Headers({"content-length":"10000"}),body:new ReadableStream<Uint8Array>()};
+ const custom={headers:new Headers({"content-length":"10000"}),body:new ReadableStream<Uint8Array>() as Request["body"]};
  await assert.rejects(readBoundedBody(custom,100),(e:unknown)=>
    e instanceof RequestBodyError&&e.status===413);
 });
