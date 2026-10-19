@@ -138,6 +138,7 @@ export function extractVoiceExceptions(transcript:string,invoice:InvoiceEntry[])
   // misleading "product not found" question for the second fragment.
   if(parts.length>1 && parts.some(part=>
     !invoice.some(line=>mentions(part,line.productName)) &&
+    numbers(part).length===0 &&
     (shortage.test(part)||damage.test(part))
   )) return extractVoiceException(source,invoice);
   const suggestions:VoiceSuggestion[]=[];
