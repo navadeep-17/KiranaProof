@@ -132,6 +132,14 @@ export function extractVoiceExceptions(transcript:string,invoice:InvoiceEntry[])
     verified:false,suggestions:[],questions:["Describe no more than five exceptions at a time."],
   };
   if(parts.length===0) return extractVoiceException(source,invoice);
+  // "Parle G 2 cartons missing and damaged" describes one item with
+  // conflicting issue types, not two independent fully identified issues.
+  // Preserve the specific original clarification instead of showing a
+  // misleading "product not found" question for the second fragment.
+  if(parts.length>1 && parts.some(part=>
+    !invoice.some(line=>mentions(part,line.productName)) &&
+    (shortage.test(part)||damage.test(part))
+  )) return extractVoiceException(source,invoice);
   const suggestions:VoiceSuggestion[]=[];
   const questions:string[]=[];
   const seen=new Set<string>();
