@@ -399,7 +399,15 @@ export function DeliveryWorkbench({ initialDraft }: { initialDraft?: SavedWorkbe
                 <FilePlus2 className="text-[#477063]" size={25}/>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Shop name *" placeholder="e.g. Sree Kirana" value={storeName} onChange={(v) => {setStoreName(v);invalidate();}}/>
+                {initialDraft ? (
+                  <div className="block">
+                    <span className="field-label">Store</span>
+                    <div className="input flex items-center bg-[#f3f6f3] font-semibold" aria-label="Saved store name">{storeName}</div>
+                    <span className="mt-1 block text-[11px] text-[#81918c]">Store name is fixed for saved deliveries.</span>
+                  </div>
+                ) : (
+                  <Field label="Shop name *" placeholder="e.g. Sree Kirana" value={storeName} onChange={(v) => {setStoreName(v);invalidate();}}/>
+                )}
                 <Field label="Supplier / distributor *" placeholder="e.g. Ravi Distributors" value={supplier} onChange={(v) => { setSupplier(v); invalidate(); }}/>
                 <Field label="Invoice / order reference *" placeholder="e.g. INV-1208" value={reference} onChange={(v) => { setReference(v); invalidate(); }}/>
                 <label className="block"><span className="field-label">Baseline document</span>
