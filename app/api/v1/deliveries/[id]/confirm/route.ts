@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkWriteRequest } from "@/lib/deliveries/write-guards";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -9,6 +10,8 @@ import { reconcile } from "@/lib/reconciliation/engine";
 export const runtime="nodejs";
 
 export async function POST(request:NextRequest,{params}:{params:Promise<{id:string}>}) {
+  const guard = checkWriteRequest(request);
+  if (guard) return NextResponse.json({error:guard.error},{status:guard.status});
   const {id}=await params;
   if(!z.uuid().safeParse(id).success) return NextResponse.json({error:"Invalid delivery id."},{status:400});
   try {

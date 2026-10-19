@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkWriteRequest } from "@/lib/deliveries/write-guards";
 import { ZodError } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -7,6 +8,8 @@ import { createDeliverySchema, evaluateSubmission, toDatabasePayload } from "@/l
 export const runtime="nodejs";
 
 export async function POST(request:NextRequest) {
+  const guard = checkWriteRequest(request);
+  if (guard) return NextResponse.json({error:guard.error},{status:guard.status});
   try {
     const userClient=await createServerSupabaseClient();
     const {data:auth,error:authError}=await userClient.auth.getUser();
