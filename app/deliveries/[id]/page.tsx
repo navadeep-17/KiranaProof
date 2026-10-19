@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Boxes, CheckCircle2, ClipboardList, Pencil } from "lucide-react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ApproveClaimButton } from "@/components/claims/claim-actions";
 export const dynamic="force-dynamic";
 
 export default async function DeliveryDetail({params}:{params:Promise<{id:string}>}) {
@@ -10,7 +11,7 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
   const {data:auth}=await db.auth.getUser();
   if(!auth.user) redirect("/login");
   const {data:delivery}=await db.from("deliveries")
-    .select("id,reference_number,baseline_type,delivery_date,status,confirmed_at")
+    .select("id,reference_number,baseline_type,delivery_date,status,version,confirmed_at")
     .eq("id",id).maybeSingle();
   if(!delivery) notFound();
   const {data:lines,error:linesError}=await db.from("invoice_lines")
@@ -28,6 +29,9 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
     ? run.findings_json as {discrepancies?:{type:string;productName:string;affectedQuantity:number|null;unit:string;detail:string}[]}
     : null;
   const issues=Array.isArray(findings?.discrepancies)?findings.discrepancies:[];
+  const {data:existingClaim,error:claimError}=await db.from("claims")
+    .select("id,status").eq("delivery_id",id).maybeSingle();
+  if(claimError) throw new Error("Unable to check claim status.");
   const unexpected=(receipts??[]).filter(r=>r.invoice_line_id===null);
   const receiptMap=new Map((receipts??[]).filter(r=>r.invoice_line_id).map(r=>[r.invoice_line_id,r]));
   return <div className="min-h-screen bg-[#f7f7f2]">
@@ -50,7 +54,7 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
         </h2>
         <p className="mt-2 text-sm leading-6 text-[#63777d]">
           {delivery.status==="RECONCILED"?"All invoice lines matched and were confirmed. No supplier action is required.":
-            delivery.status==="HAS_DISCREPANCY"?"Differences are stored. A supplier claim is not created until separately approved in the next milestone.":
+            delivery.status==="HAS_DISCREPANCY"?"Differences are stored. A supplier claim requires your separate, explicit approval.":
             "This draft has not been confirmed. Resume verification to correct missing information and save again."}
         </p>
       </div>
@@ -75,6 +79,15 @@ export default async function DeliveryDetail({params}:{params:Promise<{id:string
           </div>
         ))}</div>
       </section>}
+      {delivery.status==="HAS_DISCREPANCY" && (
+        existingClaim ? (
+          <Link href={`/claims/${existingClaim.id}`} className="btn btn-primary mt-6">
+            View approved claim ({existingClaim.status.replaceAll("_"," ")})
+          </Link>
+        ) : (
+          <ApproveClaimButton deliveryId={delivery.id} version={delivery.version}/>
+        )
+      )}
       <section className="surface mt-6 rounded-[20px] p-5 sm:p-7">
         <h2 className="flex items-center gap-2 text-lg font-extrabold"><ClipboardList size={20}/> Invoice comparison</h2>
         <div className="mt-5 space-y-3">{(lines??[]).map(line=>{
