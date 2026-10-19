@@ -26,7 +26,7 @@ export function SupplierReplyForm({token}:{token:string}) {
     }catch(e){setError(e instanceof Error?e.message:words.error);}
     finally{setBusy(false);}
   }
-  if(done) return <div role="status" className="rounded-2xl border border-[#cfe5d4] bg-[#f0faf3] p-6">
+  if(done) return <div role="status" lang={language} className="rounded-2xl border border-[#cfe5d4] bg-[#f0faf3] p-6">
     <CheckCircle2 size={28} className="text-[#32805b]"/>
     <h2 className="mt-3 text-xl font-extrabold">{words.doneTitle}</h2>
     <p className="mt-2 text-sm text-[#5e796a]">{words.doneDescription}</p>
