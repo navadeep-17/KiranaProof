@@ -4,7 +4,7 @@ test("manual delivery and voice fallback can be navigated by keyboard",async({pa
   await page.goto("/deliveries/new");
   await page.getByRole("button",{name:/Load sample invoice/i}).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading",{name:"Parle-G"})).toBeVisible();
+  await expect(page.getByPlaceholder("e.g. Parle-G")).toHaveValue("Parle-G");
   const baseline=page.getByRole("checkbox",{name:/I confirm every line/i});
   await baseline.focus();
   await page.keyboard.press("Space");
