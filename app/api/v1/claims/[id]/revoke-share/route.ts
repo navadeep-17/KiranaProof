@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { readBoundedJson,RequestBodyError } from "@/lib/http/bounded-body";
 
 export const runtime="nodejs";
 
@@ -15,7 +16,7 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     const client=await createServerSupabaseClient();
     const {data:auth,error:authError}=await client.auth.getUser();
     if(authError||!auth.user) return NextResponse.json({error:"Authentication required."},{status:401});
-    const body=z.object({confirmRevoke:z.literal(true)}).strict().safeParse(await request.json());
+    const body=z.object({confirmRevoke:z.literal(true)}).strict().safeParse(await readBoundedJson(request));
     if(!body.success) return NextResponse.json({error:"Confirm link revocation."},{status:400});
     const admin=createAdminClient();
     const {data,error}=await admin.rpc("kp_revoke_supplier_link",{
@@ -28,6 +29,8 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     }
     return NextResponse.json({revoked:data.revoked},{headers:{"Cache-Control":"no-store"}});
   }catch(e) {
+    if(e instanceof RequestBodyError)
+      return NextResponse.json({error:e.message},{status:e.status});
     if(e instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
     console.error("Link revocation unavailable",e instanceof Error?e.name:"Unknown");
     return NextResponse.json({error:"Revocation unavailable."},{status:503});

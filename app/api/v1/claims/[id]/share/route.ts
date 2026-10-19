@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { readBoundedJson,RequestBodyError } from "@/lib/http/bounded-body";
 import { issueShareLinkSchema } from "@/lib/claims/schema";
 import { createSupplierToken,hashSupplierToken } from "@/lib/claims/token-core";
 
@@ -16,7 +17,7 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     const client=await createServerSupabaseClient();
     const {data:auth,error:authError}=await client.auth.getUser();
     if(authError||!auth.user) return NextResponse.json({error:"Authentication required."},{status:401});
-    const input=issueShareLinkSchema.safeParse(await request.json());
+    const input=issueShareLinkSchema.safeParse(await readBoundedJson(request));
     if(!input.success) return NextResponse.json({error:"Explicitly confirm the link expiry before generating."},{status:400});
     const token=createSupplierToken();
     const tokenHash=hashSupplierToken(token);
@@ -37,6 +38,8 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
       headers:{"Cache-Control":"no-store, private","Referrer-Policy":"no-referrer","X-Robots-Tag":"noindex"},
     });
   }catch(error) {
+    if(error instanceof RequestBodyError)
+      return NextResponse.json({error:error.message},{status:error.status});
     if(error instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
     console.error("Supplier share unavailable",error instanceof Error?error.name:"Unknown");
     return NextResponse.json({error:"Unable to issue supplier link."},{status:503});

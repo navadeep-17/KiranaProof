@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkWriteRequest } from "@/lib/deliveries/write-guards";
+import { readBoundedJson,RequestBodyError } from "@/lib/http/bounded-body";
 import { approveClaimSchema } from "@/lib/claims/schema";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     const client=await createServerSupabaseClient();
     const {data:auth,error:authError}=await client.auth.getUser();
     if(authError||!auth.user) return NextResponse.json({error:"Sign in to approve a claim."},{status:401});
-    const input=approveClaimSchema.safeParse(await request.json());
+    const input=approveClaimSchema.safeParse(await readBoundedJson(request));
     if(!input.success) return NextResponse.json({error:"Review and explicitly approve the discrepancy before creating a claim."},{status:400});
     const admin=createAdminClient();
     const {data,error}=await admin.rpc("kp_approve_reviewed_claim",{
@@ -31,6 +32,8 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{id:stri
     }
     return NextResponse.json({claimId:data.claimId,replayed:data.replayed},{status:data.replayed?200:201,headers:{"Cache-Control":"no-store"}});
   }catch(error) {
+    if(error instanceof RequestBodyError)
+      return NextResponse.json({error:error.message},{status:error.status});
     if(error instanceof SyntaxError) return NextResponse.json({error:"Invalid JSON."},{status:400});
     console.error("Claim approval unavailable",error instanceof Error?error.name:"Unknown");
     return NextResponse.json({error:"Claim approval unavailable."},{status:503});
