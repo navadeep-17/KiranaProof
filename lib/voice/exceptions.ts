@@ -64,6 +64,8 @@ function unitMentioned(text:string,unit:string){
 }
 const shortage=/(?:\bmissing\b|\bshort\b|\bshortage\b|\bless\b|\bnot received\b|తక్కువ|రాలేదు|మిస్సింగ్)/iu;
 const damage=/(?:\bdamaged?\b|\bbroken\b|\bspoilt\b|పాడై|దెబ్బతిన్న|డ్యామేజ్)/iu;
+const wrongVariantOrItem=/(?:\bwrong\b|\bdifferent\b|\bswapped\b|వేరే|తప్పు)/iu;
+const unexpectedOrExcess=/(?:\bextra\b|\badditional\b|\bexcess\b|\bmore than billed\b|not invoiced|అదనంగా)/iu;
 
 /**
  * Conservative baseline-scoped extraction of ONE specific spoken exception.
@@ -74,6 +76,12 @@ export function extractVoiceException(transcript:string,invoice:InvoiceEntry[]):
  const questions:string[]=[];
  const text=transcript.trim();
  if(!text) return {suggestions:[],questions:["Speak an exception or type it first."],verified:false};
+ if(wrongVariantOrItem.test(text))return {
+   suggestions:[],questions:["Wrong product or pack size: enter the actual received name and variant in the receipt. Voice cannot safely verify product identity."],verified:false,
+ };
+ if(unexpectedOrExcess.test(text))return {
+   suggestions:[],questions:["Extra or unbilled goods: enter them in the unexpected-items section, or manually verify an excess receipt quantity."],verified:false,
+ };
  const matched=invoice.filter(x=>mentions(text,x.productName));
  if(matched.length!==1) {
    questions.push(matched.length===0?
