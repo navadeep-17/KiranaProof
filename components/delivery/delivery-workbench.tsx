@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, Boxes, Check, CheckCircle2, ChevronLeft,
@@ -124,6 +125,11 @@ function IssueCard({
 }
 
 export function DeliveryWorkbench() {
+  const router = useRouter();
+  const [storeName,setStoreName] = useState("My Kirana Store");
+  const [saving,setSaving] = useState(false);
+  const [requestKey,setRequestKey] = useState<string | null>(null);
+  const [savedDelivery,setSavedDelivery] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [supplier, setSupplier] = useState("");
   const [reference, setReference] = useState("");
@@ -136,7 +142,7 @@ export function DeliveryWorkbench() {
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const invalidate = () => { setResult(null); setError(null); };
+  const invalidate = () => { setResult(null); setError(null); setRequestKey(null); setSavedDelivery(null); };
   const updateInvoice = (id: string, patch: Partial<InvoiceEntry>) => {
     setInvoice((rows) => rows.map((row) => row.id === id ? { ...row, ...patch } : row));
     setInvoiceComplete(false);
@@ -255,6 +261,47 @@ export function DeliveryWorkbench() {
     }
   };
 
+  const saveAndConfirm = async () => {
+    if(!result || result.result==="NEEDS_REVIEW") {
+      setError("Resolve all checks before confirming the delivery.");
+      return;
+    }
+    if(saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const id=requestKey ?? crypto.randomUUID();
+      setRequestKey(id);
+      const saved=await fetch("/api/v1/deliveries",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          clientRequestId:id,storeName,supplierName:supplier,referenceNumber:reference,
+          baselineType,invoice,receipts,unexpected,
+          invoiceCompleteConfirmed:invoiceComplete,unexpectedItemsChecked:unexpectedChecked,
+        }),
+      });
+      const data=await saved.json();
+      if(!saved.ok) {
+        if(saved.status===401) throw new Error("Sign in first to save. The current workbench stays open so you can sign in in a second tab.");
+        throw new Error(data.error ?? "Unable to save delivery.");
+      }
+      setSavedDelivery(data.id);
+      const confirmed=await fetch(`/api/v1/deliveries/${encodeURIComponent(data.id)}/confirm`,{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({expectedVersion:data.version}),
+      });
+      const confirmation=await confirmed.json();
+      if(!confirmed.ok) throw new Error(confirmation.error ?? "Saved as draft, but could not confirm.");
+      router.push(`/deliveries/${encodeURIComponent(data.id)}`);
+      router.refresh();
+    }catch(cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save delivery.");
+    }finally {
+      setSaving(false);
+    }
+  };
+
   const verifiedCount = receipts.filter((r) => r.verified).length;
   const issuesCount = result?.discrepancies.length ?? 0;
 
@@ -267,7 +314,8 @@ export function DeliveryWorkbench() {
             <span>Kirana<span className="text-[#d46b2b]">Proof</span></span>
           </Link>
           <div className="flex items-center gap-2">
-            <span className="hidden rounded-full bg-[#f6f0e7] px-3 py-1.5 text-[11px] font-bold text-[#a76837] sm:block">MILESTONE 2 · LOCAL WORKBENCH</span>
+            <span className="hidden rounded-full bg-[#f6f0e7] px-3 py-1.5 text-[11px] font-bold text-[#a76837] sm:block">MILESTONE 3 · SAVE & CONFIRM</span>
+            <Link href="/login" target="_blank" className="btn btn-outline !min-h-9 !px-3 !py-1.5">Sign in to save</Link>
             <Link href="/" className="btn btn-outline !min-h-9 !px-3 !py-1.5"><ArrowLeft size={15}/> Home</Link>
           </div>
         </div>
@@ -285,7 +333,7 @@ export function DeliveryWorkbench() {
 
         <div className="mb-6 rounded-xl border border-[#dce7ea] bg-[#eef5f7] px-4 py-3 text-xs leading-5 text-[#456274]">
           <span className="inline-flex items-start gap-2"><Info size={16} className="mt-0.5 shrink-0"/>
-            <span><strong>Interactive prototype:</strong> calculations are real and use our tested rule engine, but deliveries are not stored and no supplier claims or messages are created yet. Supabase persistence and voice follow in later milestones.</span>
+            <span><strong>Invoice-first:</strong> comparisons use our tested rule engine. Once every line is verified, you can sign in and explicitly confirm the saved delivery. Supplier claims and voice features will follow in later milestones.</span>
           </span>
         </div>
 
@@ -312,6 +360,7 @@ export function DeliveryWorkbench() {
                 <FilePlus2 className="text-[#477063]" size={25}/>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Shop name *" placeholder="e.g. Sree Kirana" value={storeName} onChange={(v) => {setStoreName(v);invalidate();}}/>
                 <Field label="Supplier / distributor *" placeholder="e.g. Ravi Distributors" value={supplier} onChange={(v) => { setSupplier(v); invalidate(); }}/>
                 <Field label="Invoice / order reference *" placeholder="e.g. INV-1208" value={reference} onChange={(v) => { setReference(v); invalidate(); }}/>
                 <label className="block"><span className="field-label">Baseline document</span>
@@ -473,11 +522,21 @@ export function DeliveryWorkbench() {
               </section>
             )}
             <section className="rounded-[20px] border border-dashed border-[#cfdadd] bg-[#f8fbfb] p-5">
-              <div className="flex items-start gap-3"><Info size={19} className="mt-0.5 shrink-0 text-[#497889]"/><div className="text-sm text-[#59717d]"><strong>Preview only.</strong> This verification has not been saved or approved. The next milestone will add an authenticated confirmation step, persistent delivery history, and a separate explicit approval before any supplier claim is created.</div></div>
+              <div className="flex items-start gap-3"><Info size={19} className="mt-0.5 shrink-0 text-[#497889]"/><div className="text-sm text-[#59717d]"><strong>Review before saving.</strong> A delivery is saved only when you choose Confirm and save. Correct deliveries create no claims; discrepant deliveries retain findings but do not contact a supplier.</div></div>
             </section>
-            <div className="flex flex-col-reverse justify-between gap-3 sm:flex-row">
-              <button className="btn btn-outline" onClick={() => { setStep(1); setError(null); }}><ChevronLeft size={17}/> Correct received items</button>
-              <button className="btn btn-primary" onClick={() => { setStep(0); setError(null); }}><RotateCcw size={16}/> Review invoice baseline</button>
+            {savedDelivery && (
+              <div role="status" className="rounded-xl border border-[#cfe2d6] bg-[#f0faf3] p-4 text-sm text-[#295f42]">
+                Delivery saved. If confirmation failed, <Link className="font-bold underline" href={`/deliveries/${savedDelivery}`}>open the saved record</Link>.
+              </div>
+            )}
+            <div className="flex flex-col-reverse flex-wrap justify-between gap-3 sm:flex-row">
+              <button disabled={saving} className="btn btn-outline" onClick={() => { setStep(1); setError(null); }}><ChevronLeft size={17}/> Correct received items</button>
+              {result.fullyVerified && (
+                <button disabled={saving} className="btn btn-primary" onClick={saveAndConfirm}>
+                  <CheckCircle2 size={17}/>{saving ? "Saving and confirming..." : result.result==="RECONCILED" ? "Confirm clean delivery & save" : "Confirm discrepancies & save"}
+                </button>
+              )}
+              {!result.fullyVerified && <button className="btn btn-outline" onClick={() => {setStep(1);setError(null);}}>Resolve pending checks <ArrowRight size={16}/></button>}
             </div>
           </div>
         )}

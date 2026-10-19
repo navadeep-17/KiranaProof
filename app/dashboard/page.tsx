@@ -48,14 +48,14 @@ export default async function Dashboard() {
           {storeError || deliveriesError ? (
             <p className="mt-5 text-sm text-[#a74b35]">Couldn't load deliveries. Please try again.</p>
           ) : !store ? (
-            <p className="mt-5 text-sm leading-6 text-[#6d7983]">Your account is ready. Store onboarding and saved deliveries are being implemented in this milestone.</p>
+            <p className="mt-5 text-sm leading-6 text-[#6d7983]">Create your first delivery from the workbench. Your shop will be created when you save it.</p>
           ) : (deliveries?.length ?? 0) === 0 ? (
-            <p className="mt-5 text-sm leading-6 text-[#6d7983]">No saved deliveries yet. Use the workbench to practice a complete comparison while persistence is being connected.</p>
+            <p className="mt-5 text-sm leading-6 text-[#6d7983]">No saved deliveries yet. Open the workbench, reconcile the complete invoice and explicitly confirm to save.</p>
           ) : (
             <div className="mt-5 divide-y divide-[#e9eded]">
               {(deliveries ?? []).map((delivery) => (
                 <div key={delivery.id} className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm">
-                  <div><strong>{delivery.reference_number}</strong><p className="mt-1 text-xs text-[#85939a]">{delivery.delivery_date}</p></div>
+                  <div><Link href={`/deliveries/${delivery.id}`} className="font-bold underline underline-offset-4">{delivery.reference_number}</Link><p className="mt-1 text-xs text-[#85939a]">{delivery.delivery_date}</p></div>
                   <span className="rounded-full bg-[#f3f6f4] px-3 py-1.5 text-xs font-bold text-[#4e685c]">{delivery.status}</span>
                 </div>
               ))}
@@ -63,7 +63,7 @@ export default async function Dashboard() {
           )}
         </div>
         <div className="mt-5 flex items-start gap-3 rounded-xl border border-[#d9e4e7] bg-[#eef6f8] px-4 py-3 text-xs leading-5 text-[#536d78]">
-          <Info size={18} className="shrink-0"/> This dashboard reads live account-scoped Supabase data. The manual workbench remains in-memory until authenticated saving is completed.
+          <Info size={18} className="shrink-0"/> This dashboard reads account-scoped Supabase data. Clean deliveries remain claim-free, and pending checks cannot be confirmed.
         </div>
       </main>
     </div>
